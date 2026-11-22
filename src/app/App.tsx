@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { LyricsDocument } from '../domain/lyrics/lyrics-types'
 import { IndexedDbRomanizationCache } from '../domain/romanization/indexeddb-romanization-cache'
+import { IndexedDbReadingOverrideStore } from '../domain/romanization/indexeddb-reading-override-store'
 import { createRomanizationCacheKey } from '../domain/romanization/romanization-cache-key'
+import { createReadingOverrideKey } from '../domain/romanization/reading-override-key'
 import { createRomanizerRegistry } from '../domain/romanization/romanizer-registry'
 import { LyricsSourcePanel } from '../features/lyrics-source/LyricsSourcePanel'
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
@@ -17,15 +19,44 @@ const romanizerRegistry = createRomanizerRegistry({
   },
 })
 const romanizationCache = new IndexedDbRomanizationCache()
+const readingOverrideStore = new IndexedDbReadingOverrideStore()
 const romanizationOptions = romanizerRegistry.manualProviders.map(({ id, displayName }) => ({ id, displayName }))
 
 export function App() {
   const [lyricsDocument, setLyricsDocument] = useState<LyricsDocument>(sampleLyricsDocument)
   const [romanizedLines, setRomanizedLines] = useState<Record<string, string>>({})
+  const [providerRomanizedLines, setProviderRomanizedLines] = useState<Record<string, string>>({})
+  const [editedLines, setEditedLines] = useState<Record<string, boolean>>({})
   const [cachedLines, setCachedLines] = useState<Record<string, boolean>>({})
   const [isRomanizing, setIsRomanizing] = useState(false)
   const [romanizationError, setRomanizationError] = useState<string>()
   const [romanizationProviderId, setRomanizationProviderId] = useState('japanese-kuroshiro')
+
+  const restoreReadingOverrides = async (document: LyricsDocument, providerId: string) => {
+    const restoredReadings: Record<string, string> = {}
+    const restoredEditedLines: Record<string, boolean> = {}
+
+    for (const line of document.lines) {
+      const key = createReadingOverrideKey({
+        sourceId: document.sourceId,
+        lineId: line.id,
+        providerId,
+        originalText: line.text,
+      })
+      const override = await readingOverrideStore.get(key)
+      if (override?.originalText === line.text && override.readingText.trim()) {
+        restoredReadings[line.id] = override.readingText
+        restoredEditedLines[line.id] = true
+      }
+    }
+
+    setRomanizedLines(restoredReadings)
+    setEditedLines(restoredEditedLines)
+  }
+
+  useEffect(() => {
+    void restoreReadingOverrides(sampleLyricsDocument, romanizationProviderId)
+  }, [])
 
   const romanizeSelectedLanguage = async () => {
     setRomanizationError(undefined)
@@ -33,6 +64,7 @@ export function App() {
 
     try {
       const nextReadings = { ...romanizedLines }
+      const nextProviderReadings = { ...providerRomanizedLines }
       const nextCachedLines = { ...cachedLines }
       let convertedCount = 0
       const romanizer = romanizerRegistry.get(romanizationProviderId)
@@ -59,7 +91,8 @@ export function App() {
         }
 
         if (cachedEntry?.originalText === line.text) {
-          nextReadings[line.id] = cachedEntry.romanizedText
+          nextProviderReadings[line.id] = cachedEntry.romanizedText
+          if (!editedLines[line.id]) nextReadings[line.id] = cachedEntry.romanizedText
           nextCachedLines[line.id] = true
           convertedCount += 1
           continue
@@ -67,7 +100,8 @@ export function App() {
 
         const result = await romanizer.romanize({ text: line.text })
         if (result.status === 'complete') {
-          nextReadings[line.id] = result.romanizedText
+          nextProviderReadings[line.id] = result.romanizedText
+          if (!editedLines[line.id]) nextReadings[line.id] = result.romanizedText
           delete nextCachedLines[line.id]
           const now = Date.now()
           try {
@@ -92,6 +126,7 @@ export function App() {
       }
 
       setRomanizedLines(nextReadings)
+      setProviderRomanizedLines(nextProviderReadings)
       setCachedLines(nextCachedLines)
       if (convertedCount === 0 && Object.keys(nextReadings).length === 0) {
         setRomanizationError('No lines supported by the selected romanizer were found.')
@@ -101,6 +136,46 @@ export function App() {
     } finally {
       setIsRomanizing(false)
     }
+  }
+
+  const updateReadingOverride = async (lineId: string, readingText: string) => {
+    const line = lyricsDocument.lines.find((candidate) => candidate.id === lineId)
+    if (!line) return
+
+    const key = createReadingOverrideKey({
+      sourceId: lyricsDocument.sourceId,
+      lineId,
+      providerId: romanizationProviderId,
+      originalText: line.text,
+    })
+
+    if (!readingText.trim()) {
+      await readingOverrideStore.delete(key)
+      setEditedLines((current) => {
+        const next = { ...current }
+        delete next[lineId]
+        return next
+      })
+      setRomanizedLines((current) => {
+        const next = { ...current }
+        if (providerRomanizedLines[lineId]) next[lineId] = providerRomanizedLines[lineId]
+        else delete next[lineId]
+        return next
+      })
+      return
+    }
+
+    await readingOverrideStore.set(key, {
+      key,
+      sourceId: lyricsDocument.sourceId,
+      lineId,
+      providerId: romanizationProviderId,
+      originalText: line.text,
+      readingText,
+      updatedAt: Date.now(),
+    })
+    setEditedLines((current) => ({ ...current, [lineId]: true }))
+    setRomanizedLines((current) => ({ ...current, [lineId]: readingText }))
   }
 
   return (
@@ -130,8 +205,11 @@ export function App() {
                 onLoaded={(document) => {
                   setLyricsDocument(document)
                   setRomanizedLines({})
+                  setProviderRomanizedLines({})
+                  setEditedLines({})
                   setCachedLines({})
                   setRomanizationError(undefined)
+                  void restoreReadingOverrides(document, romanizationProviderId)
                 }}
               />
               <p className="text-sm text-slate-400">
@@ -142,6 +220,7 @@ export function App() {
               <SyncedLyrics
                 lines={lyricsDocument.lines}
                 romanizedLines={romanizedLines}
+                editedLines={editedLines}
                 cachedLines={cachedLines}
                 isRomanizing={isRomanizing}
                 romanizationError={romanizationError}
@@ -151,9 +230,13 @@ export function App() {
                 onRomanizationProviderChange={(providerId) => {
                   setRomanizationProviderId(providerId)
                   setRomanizedLines({})
+                  setProviderRomanizedLines({})
+                  setEditedLines({})
                   setCachedLines({})
                   setRomanizationError(undefined)
+                  void restoreReadingOverrides(lyricsDocument, providerId)
                 }}
+                onReadingOverrideChange={updateReadingOverride}
               />
             </div>
           </div>

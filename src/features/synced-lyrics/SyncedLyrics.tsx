@@ -6,6 +6,7 @@ type SyncedLyricsProps = {
   lines: LyricLine[]
   timer?: ManualTimer
   romanizedLines?: Record<string, string>
+  editedLines?: Record<string, boolean>
   cachedLines?: Record<string, boolean>
   isRomanizing?: boolean
   romanizationError?: string
@@ -13,6 +14,7 @@ type SyncedLyricsProps = {
   romanizationProviderId?: string
   romanizationOptions?: Array<{ id: string; displayName: string }>
   onRomanizationProviderChange?: (providerId: string) => void
+  onReadingOverrideChange?: (lineId: string, readingText: string) => void | Promise<void>
 }
 
 function getActiveLineId(lines: LyricLine[], currentTime: number): string | undefined {
@@ -25,6 +27,7 @@ export function SyncedLyrics({
   lines,
   timer,
   romanizedLines = {},
+  editedLines = {},
   cachedLines = {},
   isRomanizing = false,
   romanizationError,
@@ -32,12 +35,15 @@ export function SyncedLyrics({
   romanizationProviderId = '',
   romanizationOptions = [],
   onRomanizationProviderChange,
+  onReadingOverrideChange,
 }: SyncedLyricsProps) {
   const timerRef = useRef<ManualTimer | null>(null)
   if (!timerRef.current) timerRef.current = timer ?? new ManualTimer()
 
   const [currentTime, setCurrentTime] = useState(() => timerRef.current?.getCurrentTime() ?? 0)
   const [playing, setPlaying] = useState(false)
+  const [editingLineId, setEditingLineId] = useState<string>()
+  const [draftReading, setDraftReading] = useState('')
 
   useEffect(() => {
     let frameId: number | undefined
@@ -104,8 +110,65 @@ export function SyncedLyrics({
               </p>
               {romanizedLines[line.id] && (
                 <div className="px-4 pb-2">
-                  <p className="text-sm italic text-blue-300/80 sm:text-base">{romanizedLines[line.id]}</p>
-                  {cachedLines[line.id] && <p className="mt-1 text-xs text-slate-500">Cached locally</p>}
+                  {editingLineId === line.id ? (
+                    <div className="space-y-2">
+                      <input
+                        aria-label={`Edit reading for ${line.text}`}
+                        value={draftReading}
+                        onChange={(event) => setDraftReading(event.target.value)}
+                        className="w-full rounded-lg border border-blue-500/70 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-blue-300"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void onReadingOverrideChange?.(line.id, draftReading)
+                            setEditingLineId(undefined)
+                          }}
+                          className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-400"
+                        >
+                          Save reading
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void onReadingOverrideChange?.(line.id, '')
+                            setEditingLineId(undefined)
+                          }}
+                          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-blue-500"
+                        >
+                          Clear edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingLineId(undefined)}
+                          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm italic text-blue-300/80 sm:text-base">{romanizedLines[line.id]}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        {editedLines[line.id] && <span>Edited locally</span>}
+                        {cachedLines[line.id] && !editedLines[line.id] && <span>Cached locally</span>}
+                        {onReadingOverrideChange && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingLineId(line.id)
+                              setDraftReading(romanizedLines[line.id])
+                            }}
+                            className="text-blue-300 hover:text-blue-200"
+                          >
+                            Edit reading
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

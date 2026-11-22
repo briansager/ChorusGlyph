@@ -2,7 +2,7 @@ import type { RomanizationCache, RomanizationCacheEntry } from './romanization-c
 
 const DEFAULT_DATABASE_NAME = 'chorus-glyph'
 const DEFAULT_STORE_NAME = 'romanizations'
-const DEFAULT_SCHEMA_VERSION = 1
+const DEFAULT_SCHEMA_VERSION = 2
 const OPERATION_TIMEOUT_MS = 1500
 
 export class IndexedDbRomanizationCache implements RomanizationCache {
@@ -107,6 +107,9 @@ export class IndexedDbRomanizationCache implements RomanizationCache {
         request.onupgradeneeded = () => {
           if (!request.result.objectStoreNames.contains(this.storeName)) {
             request.result.createObjectStore(this.storeName)
+          }
+          if (!request.result.objectStoreNames.contains('reading-overrides')) {
+            request.result.createObjectStore('reading-overrides')
           }
         }
         request.onsuccess = () => resolve(request.result)

@@ -51,4 +51,28 @@ describe('SyncedLyrics', () => {
     expect(screen.getByRole('option', { name: 'Azure Transliteration — Thai' })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('HTTP 403')
   })
+
+  it('edits, saves, clears, and preserves a reading separately from the original lyric', async () => {
+    const onOverrideChange = vi.fn()
+    render(
+      <SyncedLyrics
+        lines={[{ id: 'thai', text: 'สวัสดีตอนเช้า', startTime: 0 }]}
+        romanizedLines={{ thai: 'Sawatdi ton chao' }}
+        onReadingOverrideChange={onOverrideChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit reading' }))
+    const input = screen.getByRole('textbox', { name: 'Edit reading for สวัสดีตอนเช้า' })
+    fireEvent.change(input, { target: { value: 'Sawasdi ton chao' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save reading' }))
+
+    expect(onOverrideChange).toHaveBeenCalledWith('thai', 'Sawasdi ton chao')
+    expect(screen.getByText('สวัสดีตอนเช้า')).toBeInTheDocument()
+    expect(screen.getByText('Sawatdi ton chao')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit reading' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear edit' }))
+    expect(onOverrideChange).toHaveBeenLastCalledWith('thai', '')
+  })
 })
