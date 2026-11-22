@@ -13,7 +13,7 @@ export function App() {
         <header className="flex items-center justify-between border-b border-slate-800 px-6 py-5 sm:px-10">
           <p className="text-lg font-semibold tracking-tight text-blue-300">ChorusGlyph</p>
           <span className="rounded-full border border-blue-800/70 bg-blue-950/50 px-3 py-1 text-xs font-medium text-blue-200">
-            Milestone 1
+            Milestone 4
           </span>
         </header>
 
@@ -31,6 +31,11 @@ export function App() {
             </p>
             <div className="mt-10 space-y-5">
               <LyricsSourcePanel onLoaded={setLyricsDocument} />
+              <p className="text-sm text-slate-400">
+                Loaded source: <span className="font-medium text-blue-200">{lyricsDocument.sourceId}</span>
+                {lyricsDocument.title && <> · {lyricsDocument.title}</>}
+                {lyricsDocument.artist && <> by {lyricsDocument.artist}</>}
+              </p>
               <SyncedLyrics lines={lyricsDocument.lines} />
             </div>
           </div>
