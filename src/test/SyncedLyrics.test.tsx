@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { ManualTimer } from '../domain/now-playing/manual-timer'
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
 
@@ -26,5 +26,29 @@ describe('SyncedLyrics', () => {
 
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument()
+  })
+
+  it('allows selecting Azure Thai and shows conversion errors clearly', () => {
+    const onProviderChange = vi.fn()
+    render(
+      <SyncedLyrics
+        lines={[{ id: 'thai', text: 'สวัสดีตอนเช้า', startTime: 0 }]}
+        romanizationProviderId="japanese-kuroshiro"
+        romanizationOptions={[
+          { id: 'japanese-kuroshiro', displayName: 'Kuroshiro + Kuromoji' },
+          { id: 'azure-transliteration', displayName: 'Azure Transliteration — Thai' },
+        ]}
+        onRomanizationProviderChange={onProviderChange}
+        onRomanize={() => undefined}
+        romanizationError="Azure transliteration proxy returned HTTP 403."
+      />,
+    )
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reading language' }), {
+      target: { value: 'azure-transliteration' },
+    })
+    expect(onProviderChange).toHaveBeenCalledWith('azure-transliteration')
+    expect(screen.getByRole('option', { name: 'Azure Transliteration — Thai' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('HTTP 403')
   })
 })

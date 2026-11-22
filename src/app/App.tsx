@@ -8,7 +8,13 @@ import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
 import { sampleLyricsDocument } from '../features/synced-lyrics/lyric-fixtures'
 
 const romanizerRegistry = createRomanizerRegistry({
-  azureWorkerUrl: import.meta.env.VITE_TRANSLITERATION_WORKER_URL,
+  azureWorkerUrl: import.meta.env.VITE_TRANSLITERATION_PROXY_URL,
+  azureProfile: {
+    language: 'th',
+    fromScript: 'Thai',
+    toScript: 'Latn',
+    displayName: 'Thai',
+  },
 })
 const romanizationCache = new IndexedDbRomanizationCache()
 const romanizationOptions = romanizerRegistry.manualProviders.map(({ id, displayName }) => ({ id, displayName }))
@@ -33,7 +39,8 @@ export function App() {
       if (!romanizer) throw new Error('The selected romanization provider is unavailable.')
 
       for (const line of lyricsDocument.lines) {
-        if (!line.text.trim() || nextReadings[line.id] || !romanizer.supports({ text: line.text })) continue
+        const supported = romanizer.supports({ text: line.text })
+        if (!line.text.trim() || nextReadings[line.id] || !supported) continue
         const providerVersion = romanizer.version ?? '1.0.0'
         const cacheKey = createRomanizationCacheKey({
           sourceId: lyricsDocument.sourceId,

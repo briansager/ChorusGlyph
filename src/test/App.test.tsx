@@ -13,5 +13,6 @@ describe('ChorusGlyph starter page', () => {
     expect(screen.getByRole('option', { name: 'Kuroshiro + Kuromoji' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Korean Romanization' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Pinyin Pro' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Azure Transliteration — Thai' })).toBeInTheDocument()
   })
 })

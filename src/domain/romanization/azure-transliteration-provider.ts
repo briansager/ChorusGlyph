@@ -19,9 +19,8 @@ const hanPattern = /[\u3400-\u4dbf\u4e00-\u9fff\u{20000}-\u{2a6df}]/u
 
 export class AzureTransliterationProvider implements RomanizerProvider {
   readonly id = 'azure-transliteration'
-  readonly displayName = 'Azure Transliteration'
   readonly version = '1.0.0'
-  readonly manualSelectable = false
+  readonly manualSelectable = true
   private readonly workerUrl?: string
   private readonly profile?: AzureTransliterationProfile
   private readonly fetchFn: typeof fetch
@@ -29,7 +28,11 @@ export class AzureTransliterationProvider implements RomanizerProvider {
   constructor(options: AzureTransliterationProviderOptions = {}) {
     this.workerUrl = options.workerUrl?.trim() || undefined
     this.profile = options.profile
-    this.fetchFn = options.fetchFn ?? fetch
+    this.fetchFn = options.fetchFn ?? fetch.bind(globalThis)
+  }
+
+  get displayName(): string {
+    return this.profile ? `Azure Transliteration — ${this.profile.displayName}` : 'Azure Transliteration'
   }
 
   supports(input: RomanizationInput): boolean {
@@ -53,7 +56,8 @@ export class AzureTransliterationProvider implements RomanizerProvider {
 
     let response: Response
     try {
-      response = await this.fetchFn(new URL('/api/transliterate', this.workerUrl), {
+      const requestUrl = new URL('/api/transliterate', this.workerUrl)
+      response = await this.fetchFn(requestUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

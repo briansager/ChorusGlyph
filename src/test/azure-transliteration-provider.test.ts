@@ -11,6 +11,8 @@ describe('AzureTransliterationProvider', () => {
     }))
     const provider = new AzureTransliterationProvider({ workerUrl: 'https://proxy.example.workers.dev', profile, fetchFn })
 
+    expect(provider.displayName).toBe('Azure Transliteration — Thai')
+
     await expect(provider.romanize({ text: 'สวัสดี', language: 'th' })).resolves.toEqual({
       originalText: 'สวัสดี',
       romanizedText: 'sawasdi',
