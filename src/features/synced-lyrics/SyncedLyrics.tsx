@@ -5,6 +5,10 @@ import { ManualTimer } from '../../domain/now-playing/manual-timer'
 type SyncedLyricsProps = {
   lines: LyricLine[]
   timer?: ManualTimer
+  romanizedLines?: Record<string, string>
+  isRomanizing?: boolean
+  romanizationError?: string
+  onRomanize?: () => void
 }
 
 function getActiveLineId(lines: LyricLine[], currentTime: number): string | undefined {
@@ -13,7 +17,14 @@ function getActiveLineId(lines: LyricLine[], currentTime: number): string | unde
   )?.id
 }
 
-export function SyncedLyrics({ lines, timer }: SyncedLyricsProps) {
+export function SyncedLyrics({
+  lines,
+  timer,
+  romanizedLines = {},
+  isRomanizing = false,
+  romanizationError,
+  onRomanize,
+}: SyncedLyricsProps) {
   const timerRef = useRef<ManualTimer | null>(null)
   if (!timerRef.current) timerRef.current = timer ?? new ManualTimer()
 
@@ -61,7 +72,7 @@ export function SyncedLyrics({ lines, timer }: SyncedLyricsProps) {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-blue-400">Demo lyrics</p>
-          <p className="mt-1 text-sm text-slate-400">Original placeholder text for Milestone 2</p>
+          <p className="mt-1 text-sm text-slate-400">Timed lines with optional local Japanese readings</p>
         </div>
         <output className="rounded-lg bg-slate-800 px-3 py-2 font-mono text-sm text-blue-200" aria-label="Current timer position">
           {currentTime.toFixed(2)}s
@@ -72,17 +83,23 @@ export function SyncedLyrics({ lines, timer }: SyncedLyricsProps) {
         {lines.map((line) => {
           const isActive = line.id === activeLineId
           return (
-            <p
-              key={line.id}
-              className={`rounded-xl px-4 py-3 text-base transition sm:text-lg ${
+            <div key={line.id}>
+              <p
+                className={`rounded-xl px-4 py-3 text-base transition sm:text-lg ${
                 isActive
                   ? 'bg-blue-600/30 font-semibold text-blue-100 ring-1 ring-blue-400/60'
                   : 'text-slate-400'
-              }`}
-              data-active={isActive}
-            >
-              {line.text}
-            </p>
+                }`}
+                data-active={isActive}
+              >
+                {line.text}
+              </p>
+              {romanizedLines[line.id] && (
+                <p className="px-4 pb-2 text-sm italic text-blue-300/80 sm:text-base">
+                  {romanizedLines[line.id]}
+                </p>
+              )}
+            </div>
           )
         })}
       </div>
@@ -102,7 +119,22 @@ export function SyncedLyrics({ lines, timer }: SyncedLyricsProps) {
         >
           Reset
         </button>
+        {onRomanize && (
+          <button
+            type="button"
+            onClick={onRomanize}
+            disabled={isRomanizing}
+            className="rounded-lg border border-blue-500/70 px-4 py-2 text-sm font-semibold text-blue-100 transition hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          >
+            {isRomanizing ? 'Preparing Japanese readings…' : 'Romanize Japanese'}
+          </button>
+        )}
       </div>
+      {romanizationError && (
+        <p role="alert" className="mt-4 text-sm text-red-200">
+          {romanizationError}
+        </p>
+      )}
     </section>
   )
 }

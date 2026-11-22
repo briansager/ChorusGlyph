@@ -40,3 +40,11 @@ npm run build
 7. **Milestone 7 — Privacy and polish:** Improve accessibility, offline-friendly behavior, documentation, and release quality.
 
 The roadmap is provisional and will evolve as the project is built.
+
+## Japanese romanization
+
+Japanese readings are generated locally in the browser with Kuroshiro 1.2.1 and kuroshiro-analyzer-kuromoji 1.1.0. This provider does not send lyric text to a romanization service. The Kuromoji dictionary files are distributed locally with the application under `public/dict/` and are loaded from the Vite base path.
+
+Kuroshiro and kuroshiro-analyzer-kuromoji are MIT licensed. Their Kuromoji dependency is Apache-2.0 licensed. The repository includes the relevant license files and Kuromoji `NOTICE.md` with the local dictionary assets.
+
+Automatic readings are not guaranteed to be correct. Editable readings will be added in a later milestone. This milestone does not implement Korean or Chinese romanization, word-level readings, or server-side romanization.

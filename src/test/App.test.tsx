@@ -8,6 +8,6 @@ describe('ChorusGlyph starter page', () => {
 
     expect(screen.getByText('ChorusGlyph')).toBeInTheDocument()
     expect(screen.getByText(/multilingual sing-along app/i)).toBeInTheDocument()
-    expect(screen.getByText(/original placeholder text for milestone 2/i)).toBeInTheDocument()
+    expect(screen.getByText(/timed lines with optional local japanese readings/i)).toBeInTheDocument()
   })
 })
