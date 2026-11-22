@@ -2,19 +2,21 @@ import { useState } from 'react'
 import type { LyricsDocument } from '../domain/lyrics/lyrics-types'
 import { JapaneseRomanizerProvider } from '../domain/romanization/japanese-romanizer'
 import { KoreanRomanizerProvider } from '../domain/romanization/korean-romanizer'
+import { ChineseRomanizerProvider } from '../domain/romanization/chinese-romanizer'
 import { LyricsSourcePanel } from '../features/lyrics-source/LyricsSourcePanel'
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
 import { sampleLyricsDocument } from '../features/synced-lyrics/lyric-fixtures'
 
 const japaneseRomanizer = new JapaneseRomanizerProvider()
 const koreanRomanizer = new KoreanRomanizerProvider()
+const chineseRomanizer = new ChineseRomanizerProvider()
 
 export function App() {
   const [lyricsDocument, setLyricsDocument] = useState<LyricsDocument>(sampleLyricsDocument)
   const [romanizedLines, setRomanizedLines] = useState<Record<string, string>>({})
   const [isRomanizing, setIsRomanizing] = useState(false)
   const [romanizationError, setRomanizationError] = useState<string>()
-  const [romanizationLanguage, setRomanizationLanguage] = useState<'japanese' | 'korean'>('japanese')
+  const [romanizationLanguage, setRomanizationLanguage] = useState<'japanese' | 'korean' | 'chinese'>('japanese')
 
   const romanizeSelectedLanguage = async () => {
     setRomanizationError(undefined)
@@ -23,11 +25,18 @@ export function App() {
     try {
       const nextReadings = { ...romanizedLines }
       let convertedCount = 0
-      const romanizer = romanizationLanguage === 'korean' ? koreanRomanizer : japaneseRomanizer
+      const romanizer = romanizationLanguage === 'korean'
+        ? koreanRomanizer
+        : romanizationLanguage === 'chinese'
+          ? chineseRomanizer
+          : japaneseRomanizer
 
       for (const line of lyricsDocument.lines) {
         if (!line.text.trim() || nextReadings[line.id] || !romanizer.supports({ text: line.text })) continue
-        const result = await romanizer.romanize({ text: line.text, language: romanizationLanguage === 'korean' ? 'ko' : 'ja' })
+        const result = await romanizer.romanize({
+          text: line.text,
+          language: romanizationLanguage === 'korean' ? 'ko' : romanizationLanguage === 'chinese' ? 'zh' : 'ja',
+        })
         if (result.status === 'complete') {
           nextReadings[line.id] = result.romanizedText
           convertedCount += 1
@@ -36,7 +45,8 @@ export function App() {
 
       setRomanizedLines(nextReadings)
       if (convertedCount === 0 && Object.keys(nextReadings).length === 0) {
-        setRomanizationError(`No ${romanizationLanguage === 'korean' ? 'Korean' : 'Japanese'} lines were found to romanize.`)
+        const languageName = romanizationLanguage === 'korean' ? 'Korean' : romanizationLanguage === 'chinese' ? 'Chinese' : 'Japanese'
+        setRomanizationError(`No ${languageName} lines were found to romanize.`)
       }
     } catch (error) {
       setRomanizationError(error instanceof Error ? error.message : 'Romanization failed.')
@@ -51,7 +61,7 @@ export function App() {
         <header className="flex items-center justify-between border-b border-slate-800 px-6 py-5 sm:px-10">
           <p className="text-lg font-semibold tracking-tight text-blue-300">ChorusGlyph</p>
           <span className="rounded-full border border-blue-800/70 bg-blue-950/50 px-3 py-1 text-xs font-medium text-blue-200">
-            Milestone 6A
+            Milestone 6B
           </span>
         </header>
 
@@ -68,7 +78,13 @@ export function App() {
               editable romanized readings across languages.
             </p>
             <div className="mt-10 space-y-5">
-              <LyricsSourcePanel onLoaded={setLyricsDocument} />
+              <LyricsSourcePanel
+                onLoaded={(document) => {
+                  setLyricsDocument(document)
+                  setRomanizedLines({})
+                  setRomanizationError(undefined)
+                }}
+              />
               <p className="text-sm text-slate-400">
                 Loaded source: <span className="font-medium text-blue-200">{lyricsDocument.sourceId}</span>
                 {lyricsDocument.title && <> · {lyricsDocument.title}</>}

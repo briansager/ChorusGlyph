@@ -10,5 +10,6 @@ describe('ChorusGlyph starter page', () => {
     expect(screen.getByText(/multilingual sing-along app/i)).toBeInTheDocument()
     expect(screen.getByText(/timed lines with optional local readings/i)).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Reading language' })).toHaveValue('japanese')
+    expect(screen.getByRole('option', { name: 'Chinese' })).toBeInTheDocument()
   })
 })

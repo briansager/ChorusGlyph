@@ -9,8 +9,8 @@ type SyncedLyricsProps = {
   isRomanizing?: boolean
   romanizationError?: string
   onRomanize?: () => void
-  romanizationLanguage?: 'japanese' | 'korean'
-  onRomanizationLanguageChange?: (language: 'japanese' | 'korean') => void
+  romanizationLanguage?: 'japanese' | 'korean' | 'chinese'
+  onRomanizationLanguageChange?: (language: 'japanese' | 'korean' | 'chinese') => void
 }
 
 function getActiveLineId(lines: LyricLine[], currentTime: number): string | undefined {
@@ -131,11 +131,12 @@ export function SyncedLyrics({
                 <select
                   aria-label="Reading language"
                   value={romanizationLanguage}
-                  onChange={(event) => onRomanizationLanguageChange(event.target.value as 'japanese' | 'korean')}
+                  onChange={(event) => onRomanizationLanguageChange(event.target.value as 'japanese' | 'korean' | 'chinese')}
                   className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
                 >
                   <option value="japanese">Japanese</option>
                   <option value="korean">Korean</option>
+                  <option value="chinese">Chinese</option>
                 </select>
               </label>
             )}
@@ -145,7 +146,9 @@ export function SyncedLyrics({
               disabled={isRomanizing}
               className="rounded-lg border border-blue-500/70 px-4 py-2 text-sm font-semibold text-blue-100 transition hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
             >
-              {isRomanizing ? 'Preparing reading…' : `Romanize ${romanizationLanguage === 'korean' ? 'Korean' : 'Japanese'}`}
+              {isRomanizing
+                ? 'Preparing reading…'
+                : `Romanize ${romanizationLanguage === 'korean' ? 'Korean' : romanizationLanguage === 'chinese' ? 'Chinese' : 'Japanese'}`}
             </button>
           </>
         )}
