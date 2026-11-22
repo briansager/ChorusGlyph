@@ -1,7 +1,12 @@
+import { useState } from 'react'
+import type { LyricsDocument } from '../domain/lyrics/lyrics-types'
+import { LyricsSourcePanel } from '../features/lyrics-source/LyricsSourcePanel'
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
-import { sampleLyrics } from '../features/synced-lyrics/lyric-fixtures'
+import { sampleLyricsDocument } from '../features/synced-lyrics/lyric-fixtures'
 
 export function App() {
+  const [lyricsDocument, setLyricsDocument] = useState<LyricsDocument>(sampleLyricsDocument)
+
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-8 sm:py-10">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl flex-col overflow-hidden rounded-3xl border border-blue-900/60 bg-slate-900 shadow-2xl shadow-blue-950/30 sm:min-h-[calc(100vh-5rem)]">
@@ -24,8 +29,9 @@ export function App() {
               ChorusGlyph is a privacy-conscious app for exploring songs with readable,
               editable romanized readings across languages.
             </p>
-            <div className="mt-10">
-              <SyncedLyrics lines={sampleLyrics} />
+            <div className="mt-10 space-y-5">
+              <LyricsSourcePanel onLoaded={setLyricsDocument} />
+              <SyncedLyrics lines={lyricsDocument.lines} />
             </div>
           </div>
         </section>
