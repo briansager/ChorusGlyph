@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.vite/
+coverage/
+*.local
+
+# TypeScript build information
+*.tsbuildinfo
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
