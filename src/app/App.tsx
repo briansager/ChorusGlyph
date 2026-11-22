@@ -1,3 +1,6 @@
+import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
+import { sampleLyrics } from '../features/synced-lyrics/lyric-fixtures'
+
 export function App() {
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-8 sm:py-10">
@@ -21,11 +24,8 @@ export function App() {
               ChorusGlyph is a privacy-conscious app for exploring songs with readable,
               editable romanized readings across languages.
             </p>
-            <div className="mt-10 rounded-2xl border border-blue-800/60 bg-blue-950/40 p-5 text-blue-100 sm:p-6">
-              <p className="font-medium">Synced lyrics will be added in a later milestone.</p>
-              <p className="mt-2 text-sm leading-6 text-blue-200/80">
-                This starter page is the foundation for the lyric and now-playing experiences to come.
-              </p>
+            <div className="mt-10">
+              <SyncedLyrics lines={sampleLyrics} />
             </div>
           </div>
         </section>
