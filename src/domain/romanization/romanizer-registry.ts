@@ -15,6 +15,10 @@ export class RomanizerRegistry {
     return this.providers.find((provider) => provider.id === providerId)
   }
 
+  get manualProviders(): readonly RomanizerProvider[] {
+    return this.providers.filter((provider) => provider.manualSelectable !== false)
+  }
+
   createChain(): RomanizerChain {
     return new RomanizerChain([...this.providers])
   }
@@ -25,5 +29,18 @@ export function createLocalRomanizerRegistry(): RomanizerRegistry {
     new JapaneseRomanizerProvider(),
     new KoreanRomanizerProvider(),
     new ChineseRomanizerProvider(),
+  ])
+}
+import { AzureTransliterationProvider, type AzureTransliterationProfile } from './azure-transliteration-provider'
+
+export function createRomanizerRegistry(options: {
+  azureWorkerUrl?: string
+  azureProfile?: AzureTransliterationProfile
+} = {}): RomanizerRegistry {
+  return new RomanizerRegistry([
+    new JapaneseRomanizerProvider(),
+    new KoreanRomanizerProvider(),
+    new ChineseRomanizerProvider(),
+    new AzureTransliterationProvider({ workerUrl: options.azureWorkerUrl, profile: options.azureProfile }),
   ])
 }

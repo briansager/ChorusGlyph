@@ -18,7 +18,7 @@ export type RomanizationResult = {
   romanizedText: string
   providerId: string
   status: RomanizationStatus
-  generation?: 'browser' | 'deterministic'
+  generation?: 'browser' | 'deterministic' | 'external'
   confidence?: number
   words?: RomanizedWord[]
 }

@@ -66,3 +66,11 @@ Automatic pinyin readings may be imperfect, especially for names, dialectal pron
 The current fallback chain contains only the local Japanese, Korean, and Chinese providers. It chooses providers in that order when automatic selection is requested; the manual selector still lets you choose a specific provider. Azure and an optional AI fallback are planned, but they are not implemented.
 
 Completed romanization results may be cached only in the user's browser using IndexedDB. ChorusGlyph does not store lyrics-related cache data on its server, and local romanization makes no network request. Browser site-data controls can be used to clear the cache. If IndexedDB is unavailable or blocked, romanization continues without caching.
+
+## Azure transliteration fallback
+
+Azure Transliterate is an optional later fallback for scripts without a local provider. Browser requests go only to the Cloudflare Worker in `proxy/`; the Azure endpoint and credentials are never called or included by the frontend. The Worker does not store lyrics or romanization results and does not use a third-party proxy.
+
+Set the public frontend variable `VITE_TRANSLITERATION_WORKER_URL` only to the Worker base URL. The Azure key belongs in Cloudflare with `npx wrangler secret put AZURE_TRANSLATOR_KEY`; never commit `.env`, `.dev.vars`, or real secret values. The Worker also accepts an optional `AZURE_TRANSLATOR_REGION` secret and uses non-secret endpoint/origin configuration from `wrangler.jsonc`.
+
+The Worker uses a best-effort in-memory limit of 20 requests per minute per IP. Because Workers are distributed and can restart, this is not a strict global quota. Azure pricing and free-tier limits can change: the current documented F0 pricing value is 2 million characters per month, not a permanent guarantee, and only one Azure free-tier resource is available per subscription. An Azure subscription and Translator resource are required.

@@ -2,14 +2,16 @@ import { useState } from 'react'
 import type { LyricsDocument } from '../domain/lyrics/lyrics-types'
 import { IndexedDbRomanizationCache } from '../domain/romanization/indexeddb-romanization-cache'
 import { createRomanizationCacheKey } from '../domain/romanization/romanization-cache-key'
-import { createLocalRomanizerRegistry } from '../domain/romanization/romanizer-registry'
+import { createRomanizerRegistry } from '../domain/romanization/romanizer-registry'
 import { LyricsSourcePanel } from '../features/lyrics-source/LyricsSourcePanel'
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
 import { sampleLyricsDocument } from '../features/synced-lyrics/lyric-fixtures'
 
-const romanizerRegistry = createLocalRomanizerRegistry()
+const romanizerRegistry = createRomanizerRegistry({
+  azureWorkerUrl: import.meta.env.VITE_TRANSLITERATION_WORKER_URL,
+})
 const romanizationCache = new IndexedDbRomanizationCache()
-const romanizationOptions = romanizerRegistry.providers.map(({ id, displayName }) => ({ id, displayName }))
+const romanizationOptions = romanizerRegistry.manualProviders.map(({ id, displayName }) => ({ id, displayName }))
 
 export function App() {
   const [lyricsDocument, setLyricsDocument] = useState<LyricsDocument>(sampleLyricsDocument)

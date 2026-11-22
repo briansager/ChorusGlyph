@@ -3,6 +3,15 @@ dist/
 .vite/
 coverage/
 *.local
+.env
+.env.*
+!.env.example
+.dev.vars
+proxy/.dev.vars
+proxy/.env
+proxy/.env.*
+!proxy/.env.example
+proxy/worker-configuration.d.ts
 
 # TypeScript build information
 *.tsbuildinfo
