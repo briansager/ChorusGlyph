@@ -1,29 +1,33 @@
 import { useState } from 'react'
 import type { LyricsDocument } from '../domain/lyrics/lyrics-types'
 import { JapaneseRomanizerProvider } from '../domain/romanization/japanese-romanizer'
+import { KoreanRomanizerProvider } from '../domain/romanization/korean-romanizer'
 import { LyricsSourcePanel } from '../features/lyrics-source/LyricsSourcePanel'
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
 import { sampleLyricsDocument } from '../features/synced-lyrics/lyric-fixtures'
 
 const japaneseRomanizer = new JapaneseRomanizerProvider()
+const koreanRomanizer = new KoreanRomanizerProvider()
 
 export function App() {
   const [lyricsDocument, setLyricsDocument] = useState<LyricsDocument>(sampleLyricsDocument)
   const [romanizedLines, setRomanizedLines] = useState<Record<string, string>>({})
   const [isRomanizing, setIsRomanizing] = useState(false)
   const [romanizationError, setRomanizationError] = useState<string>()
+  const [romanizationLanguage, setRomanizationLanguage] = useState<'japanese' | 'korean'>('japanese')
 
-  const romanizeJapanese = async () => {
+  const romanizeSelectedLanguage = async () => {
     setRomanizationError(undefined)
     setIsRomanizing(true)
 
     try {
       const nextReadings = { ...romanizedLines }
       let convertedCount = 0
+      const romanizer = romanizationLanguage === 'korean' ? koreanRomanizer : japaneseRomanizer
 
       for (const line of lyricsDocument.lines) {
-        if (!line.text.trim() || nextReadings[line.id] || !japaneseRomanizer.supports({ text: line.text })) continue
-        const result = await japaneseRomanizer.romanize({ text: line.text, language: 'ja' })
+        if (!line.text.trim() || nextReadings[line.id] || !romanizer.supports({ text: line.text })) continue
+        const result = await romanizer.romanize({ text: line.text, language: romanizationLanguage === 'korean' ? 'ko' : 'ja' })
         if (result.status === 'complete') {
           nextReadings[line.id] = result.romanizedText
           convertedCount += 1
@@ -32,10 +36,10 @@ export function App() {
 
       setRomanizedLines(nextReadings)
       if (convertedCount === 0 && Object.keys(nextReadings).length === 0) {
-        setRomanizationError('No Japanese lines were found to romanize.')
+        setRomanizationError(`No ${romanizationLanguage === 'korean' ? 'Korean' : 'Japanese'} lines were found to romanize.`)
       }
     } catch (error) {
-      setRomanizationError(error instanceof Error ? error.message : 'Japanese romanization failed.')
+      setRomanizationError(error instanceof Error ? error.message : 'Romanization failed.')
     } finally {
       setIsRomanizing(false)
     }
@@ -47,7 +51,7 @@ export function App() {
         <header className="flex items-center justify-between border-b border-slate-800 px-6 py-5 sm:px-10">
           <p className="text-lg font-semibold tracking-tight text-blue-300">ChorusGlyph</p>
           <span className="rounded-full border border-blue-800/70 bg-blue-950/50 px-3 py-1 text-xs font-medium text-blue-200">
-            Milestone 5
+            Milestone 6A
           </span>
         </header>
 
@@ -75,7 +79,9 @@ export function App() {
                 romanizedLines={romanizedLines}
                 isRomanizing={isRomanizing}
                 romanizationError={romanizationError}
-                onRomanize={romanizeJapanese}
+                onRomanize={romanizeSelectedLanguage}
+                romanizationLanguage={romanizationLanguage}
+                onRomanizationLanguageChange={setRomanizationLanguage}
               />
             </div>
           </div>

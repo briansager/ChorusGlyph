@@ -47,4 +47,10 @@ Japanese readings are generated locally in the browser with Kuroshiro 1.2.1 and 
 
 Kuroshiro and kuroshiro-analyzer-kuromoji are MIT licensed. Their Kuromoji dependency is Apache-2.0 licensed. The repository includes the relevant license files and Kuromoji `NOTICE.md` with the local dictionary assets.
 
-Automatic readings are not guaranteed to be correct. Editable readings will be added in a later milestone. This milestone does not implement Korean or Chinese romanization, word-level readings, or server-side romanization.
+Automatic readings are not guaranteed to be correct. Editable readings will be added in a later milestone. This milestone does not implement Chinese romanization, word-level readings, or server-side romanization.
+
+## Korean romanization
+
+Korean romanization is based on the official Korean Romanization rules published by the National Institute of Korean Language and the Ministry of Culture, implemented locally as a deterministic approximation. It uses no Korean romanization package, API, or network service.
+
+This first implementation handles Hangul decomposition, basic vowel and consonant mappings, final consonant neutralization, common liaison, and a small number of common boundary cases. It does not cover every possible Korean pronunciation, sound-change rule, or proper-name exception. Readings will be editable in a later milestone.

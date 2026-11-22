@@ -9,6 +9,8 @@ type SyncedLyricsProps = {
   isRomanizing?: boolean
   romanizationError?: string
   onRomanize?: () => void
+  romanizationLanguage?: 'japanese' | 'korean'
+  onRomanizationLanguageChange?: (language: 'japanese' | 'korean') => void
 }
 
 function getActiveLineId(lines: LyricLine[], currentTime: number): string | undefined {
@@ -24,6 +26,8 @@ export function SyncedLyrics({
   isRomanizing = false,
   romanizationError,
   onRomanize,
+  romanizationLanguage = 'japanese',
+  onRomanizationLanguageChange,
 }: SyncedLyricsProps) {
   const timerRef = useRef<ManualTimer | null>(null)
   if (!timerRef.current) timerRef.current = timer ?? new ManualTimer()
@@ -72,7 +76,7 @@ export function SyncedLyrics({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-blue-400">Demo lyrics</p>
-          <p className="mt-1 text-sm text-slate-400">Timed lines with optional local Japanese readings</p>
+          <p className="mt-1 text-sm text-slate-400">Timed lines with optional local readings</p>
         </div>
         <output className="rounded-lg bg-slate-800 px-3 py-2 font-mono text-sm text-blue-200" aria-label="Current timer position">
           {currentTime.toFixed(2)}s
@@ -120,14 +124,30 @@ export function SyncedLyrics({
           Reset
         </button>
         {onRomanize && (
-          <button
-            type="button"
-            onClick={onRomanize}
-            disabled={isRomanizing}
-            className="rounded-lg border border-blue-500/70 px-4 py-2 text-sm font-semibold text-blue-100 transition hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
-          >
-            {isRomanizing ? 'Preparing Japanese readings…' : 'Romanize Japanese'}
-          </button>
+          <>
+            {onRomanizationLanguageChange && (
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <span>Reading language</span>
+                <select
+                  aria-label="Reading language"
+                  value={romanizationLanguage}
+                  onChange={(event) => onRomanizationLanguageChange(event.target.value as 'japanese' | 'korean')}
+                  className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
+                >
+                  <option value="japanese">Japanese</option>
+                  <option value="korean">Korean</option>
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={onRomanize}
+              disabled={isRomanizing}
+              className="rounded-lg border border-blue-500/70 px-4 py-2 text-sm font-semibold text-blue-100 transition hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              {isRomanizing ? 'Preparing reading…' : `Romanize ${romanizationLanguage === 'korean' ? 'Korean' : 'Japanese'}`}
+            </button>
+          </>
         )}
       </div>
       {romanizationError && (
