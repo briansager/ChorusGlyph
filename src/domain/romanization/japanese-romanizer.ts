@@ -13,6 +13,7 @@ const japaneseCharacterPattern = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/
 export class JapaneseRomanizerProvider implements RomanizerProvider {
   readonly id = 'japanese-kuroshiro'
   readonly displayName = 'Kuroshiro + Kuromoji'
+  readonly version = '1.0.0'
   private readonly createConverter: () => JapaneseKuroshiroConverter
   private readonly createAnalyzer: (options: { dictPath: string }) => JapaneseKuromojiAnalyzer
   private readonly dictPath: string

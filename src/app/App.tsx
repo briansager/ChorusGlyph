@@ -1,22 +1,23 @@
 import { useState } from 'react'
 import type { LyricsDocument } from '../domain/lyrics/lyrics-types'
-import { JapaneseRomanizerProvider } from '../domain/romanization/japanese-romanizer'
-import { KoreanRomanizerProvider } from '../domain/romanization/korean-romanizer'
-import { ChineseRomanizerProvider } from '../domain/romanization/chinese-romanizer'
+import { IndexedDbRomanizationCache } from '../domain/romanization/indexeddb-romanization-cache'
+import { createRomanizationCacheKey } from '../domain/romanization/romanization-cache-key'
+import { createLocalRomanizerRegistry } from '../domain/romanization/romanizer-registry'
 import { LyricsSourcePanel } from '../features/lyrics-source/LyricsSourcePanel'
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
 import { sampleLyricsDocument } from '../features/synced-lyrics/lyric-fixtures'
 
-const japaneseRomanizer = new JapaneseRomanizerProvider()
-const koreanRomanizer = new KoreanRomanizerProvider()
-const chineseRomanizer = new ChineseRomanizerProvider()
+const romanizerRegistry = createLocalRomanizerRegistry()
+const romanizationCache = new IndexedDbRomanizationCache()
+const romanizationOptions = romanizerRegistry.providers.map(({ id, displayName }) => ({ id, displayName }))
 
 export function App() {
   const [lyricsDocument, setLyricsDocument] = useState<LyricsDocument>(sampleLyricsDocument)
   const [romanizedLines, setRomanizedLines] = useState<Record<string, string>>({})
+  const [cachedLines, setCachedLines] = useState<Record<string, boolean>>({})
   const [isRomanizing, setIsRomanizing] = useState(false)
   const [romanizationError, setRomanizationError] = useState<string>()
-  const [romanizationLanguage, setRomanizationLanguage] = useState<'japanese' | 'korean' | 'chinese'>('japanese')
+  const [romanizationProviderId, setRomanizationProviderId] = useState('japanese-kuroshiro')
 
   const romanizeSelectedLanguage = async () => {
     setRomanizationError(undefined)
@@ -24,29 +25,67 @@ export function App() {
 
     try {
       const nextReadings = { ...romanizedLines }
+      const nextCachedLines = { ...cachedLines }
       let convertedCount = 0
-      const romanizer = romanizationLanguage === 'korean'
-        ? koreanRomanizer
-        : romanizationLanguage === 'chinese'
-          ? chineseRomanizer
-          : japaneseRomanizer
+      const romanizer = romanizerRegistry.get(romanizationProviderId)
+      if (!romanizer) throw new Error('The selected romanization provider is unavailable.')
 
       for (const line of lyricsDocument.lines) {
         if (!line.text.trim() || nextReadings[line.id] || !romanizer.supports({ text: line.text })) continue
-        const result = await romanizer.romanize({
-          text: line.text,
-          language: romanizationLanguage === 'korean' ? 'ko' : romanizationLanguage === 'chinese' ? 'zh' : 'ja',
+        const providerVersion = romanizer.version ?? '1.0.0'
+        const cacheKey = createRomanizationCacheKey({
+          sourceId: lyricsDocument.sourceId,
+          title: lyricsDocument.title,
+          artist: lyricsDocument.artist,
+          duration: lyricsDocument.duration,
+          originalText: line.text,
+          providerId: romanizer.id,
+          providerVersion,
         })
+        let cachedEntry
+        try {
+          cachedEntry = await romanizationCache.get(cacheKey)
+        } catch {
+          cachedEntry = undefined
+        }
+
+        if (cachedEntry?.originalText === line.text) {
+          nextReadings[line.id] = cachedEntry.romanizedText
+          nextCachedLines[line.id] = true
+          convertedCount += 1
+          continue
+        }
+
+        const result = await romanizer.romanize({ text: line.text })
         if (result.status === 'complete') {
           nextReadings[line.id] = result.romanizedText
+          delete nextCachedLines[line.id]
+          const now = Date.now()
+          try {
+            await romanizationCache.set(cacheKey, {
+              cacheKey,
+              sourceId: lyricsDocument.sourceId,
+              title: lyricsDocument.title,
+              artist: lyricsDocument.artist,
+              duration: lyricsDocument.duration,
+              providerId: romanizer.id,
+              providerVersion,
+              originalText: line.text,
+              romanizedText: result.romanizedText,
+              createdAt: now,
+              updatedAt: now,
+            })
+          } catch {
+            // Local storage is an optimization; conversion remains usable without it.
+          }
           convertedCount += 1
         }
       }
 
       setRomanizedLines(nextReadings)
+      setCachedLines(nextCachedLines)
       if (convertedCount === 0 && Object.keys(nextReadings).length === 0) {
-        const languageName = romanizationLanguage === 'korean' ? 'Korean' : romanizationLanguage === 'chinese' ? 'Chinese' : 'Japanese'
-        setRomanizationError(`No ${languageName} lines were found to romanize.`)
+        setRomanizationError('No lines supported by the selected romanizer were found.')
       }
     } catch (error) {
       setRomanizationError(error instanceof Error ? error.message : 'Romanization failed.')
@@ -82,6 +121,7 @@ export function App() {
                 onLoaded={(document) => {
                   setLyricsDocument(document)
                   setRomanizedLines({})
+                  setCachedLines({})
                   setRomanizationError(undefined)
                 }}
               />
@@ -93,11 +133,18 @@ export function App() {
               <SyncedLyrics
                 lines={lyricsDocument.lines}
                 romanizedLines={romanizedLines}
+                cachedLines={cachedLines}
                 isRomanizing={isRomanizing}
                 romanizationError={romanizationError}
                 onRomanize={romanizeSelectedLanguage}
-                romanizationLanguage={romanizationLanguage}
-                onRomanizationLanguageChange={setRomanizationLanguage}
+                romanizationProviderId={romanizationProviderId}
+                romanizationOptions={romanizationOptions}
+                onRomanizationProviderChange={(providerId) => {
+                  setRomanizationProviderId(providerId)
+                  setRomanizedLines({})
+                  setCachedLines({})
+                  setRomanizationError(undefined)
+                }}
               />
             </div>
           </div>

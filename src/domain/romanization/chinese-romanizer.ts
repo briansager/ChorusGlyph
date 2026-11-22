@@ -12,6 +12,7 @@ export function containsHanCharacters(text: string): boolean {
 export class ChineseRomanizerProvider implements RomanizerProvider {
   readonly id = 'chinese-pinyin-pro'
   readonly displayName = 'Pinyin Pro'
+  readonly version = '1.0.0'
 
   supports(input: RomanizationInput): boolean {
     return containsHanCharacters(input.text)

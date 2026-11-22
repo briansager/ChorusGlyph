@@ -6,11 +6,13 @@ type SyncedLyricsProps = {
   lines: LyricLine[]
   timer?: ManualTimer
   romanizedLines?: Record<string, string>
+  cachedLines?: Record<string, boolean>
   isRomanizing?: boolean
   romanizationError?: string
   onRomanize?: () => void
-  romanizationLanguage?: 'japanese' | 'korean' | 'chinese'
-  onRomanizationLanguageChange?: (language: 'japanese' | 'korean' | 'chinese') => void
+  romanizationProviderId?: string
+  romanizationOptions?: Array<{ id: string; displayName: string }>
+  onRomanizationProviderChange?: (providerId: string) => void
 }
 
 function getActiveLineId(lines: LyricLine[], currentTime: number): string | undefined {
@@ -23,11 +25,13 @@ export function SyncedLyrics({
   lines,
   timer,
   romanizedLines = {},
+  cachedLines = {},
   isRomanizing = false,
   romanizationError,
   onRomanize,
-  romanizationLanguage = 'japanese',
-  onRomanizationLanguageChange,
+  romanizationProviderId = '',
+  romanizationOptions = [],
+  onRomanizationProviderChange,
 }: SyncedLyricsProps) {
   const timerRef = useRef<ManualTimer | null>(null)
   if (!timerRef.current) timerRef.current = timer ?? new ManualTimer()
@@ -99,9 +103,10 @@ export function SyncedLyrics({
                 {line.text}
               </p>
               {romanizedLines[line.id] && (
-                <p className="px-4 pb-2 text-sm italic text-blue-300/80 sm:text-base">
-                  {romanizedLines[line.id]}
-                </p>
+                <div className="px-4 pb-2">
+                  <p className="text-sm italic text-blue-300/80 sm:text-base">{romanizedLines[line.id]}</p>
+                  {cachedLines[line.id] && <p className="mt-1 text-xs text-slate-500">Cached locally</p>}
+                </div>
               )}
             </div>
           )
@@ -125,18 +130,18 @@ export function SyncedLyrics({
         </button>
         {onRomanize && (
           <>
-            {onRomanizationLanguageChange && (
+            {onRomanizationProviderChange && (
               <label className="flex items-center gap-2 text-sm text-slate-300">
                 <span>Reading language</span>
                 <select
                   aria-label="Reading language"
-                  value={romanizationLanguage}
-                  onChange={(event) => onRomanizationLanguageChange(event.target.value as 'japanese' | 'korean' | 'chinese')}
+                  value={romanizationProviderId}
+                  onChange={(event) => onRomanizationProviderChange(event.target.value)}
                   className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
                 >
-                  <option value="japanese">Japanese</option>
-                  <option value="korean">Korean</option>
-                  <option value="chinese">Chinese</option>
+                  {romanizationOptions.map((option) => (
+                    <option key={option.id} value={option.id}>{option.displayName}</option>
+                  ))}
                 </select>
               </label>
             )}
@@ -146,9 +151,7 @@ export function SyncedLyrics({
               disabled={isRomanizing}
               className="rounded-lg border border-blue-500/70 px-4 py-2 text-sm font-semibold text-blue-100 transition hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
             >
-              {isRomanizing
-                ? 'Preparing reading…'
-                : `Romanize ${romanizationLanguage === 'korean' ? 'Korean' : romanizationLanguage === 'chinese' ? 'Chinese' : 'Japanese'}`}
+              {isRomanizing ? 'Preparing reading…' : 'Romanize selected language'}
             </button>
           </>
         )}

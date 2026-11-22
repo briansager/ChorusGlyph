@@ -107,6 +107,7 @@ export function romanizeKoreanText(text: string): string {
 export class KoreanRomanizerProvider implements RomanizerProvider {
   readonly id = 'korean-local'
   readonly displayName = 'Korean Romanization'
+  readonly version = '1.0.0'
 
   supports(input: RomanizationInput): boolean {
     return Array.from(input.text).some(isHangulSyllable)

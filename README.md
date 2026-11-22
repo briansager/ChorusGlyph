@@ -60,3 +60,9 @@ This first implementation handles Hangul decomposition, basic vowel and consonan
 Chinese readings are generated locally in the browser with pinyin-pro 3.29.5 using pinyin tone marks. pinyin-pro is MIT licensed. No API key or network request is required for Chinese romanization, and the installed npm package is bundled with the application rather than loaded from a CDN.
 
 Automatic pinyin readings may be imperfect, especially for names, dialectal pronunciation, or ambiguous characters. Editable readings will be added in a later milestone.
+
+## Local romanizer chain and cache
+
+The current fallback chain contains only the local Japanese, Korean, and Chinese providers. It chooses providers in that order when automatic selection is requested; the manual selector still lets you choose a specific provider. Azure and an optional AI fallback are planned, but they are not implemented.
+
+Completed romanization results may be cached only in the user's browser using IndexedDB. ChorusGlyph does not store lyrics-related cache data on its server, and local romanization makes no network request. Browser site-data controls can be used to clear the cache. If IndexedDB is unavailable or blocked, romanization continues without caching.
