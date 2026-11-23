@@ -36,6 +36,23 @@ function statusLabel(status: ComparisonStatus): string {
   return 'Supported'
 }
 
+function statusClassName(status: ComparisonStatus): string {
+  if (status === 'error') return 'border-red-700/70 bg-red-950/40 text-red-200'
+  if (status === 'loading') return 'border-amber-700/70 bg-amber-950/40 text-amber-200'
+  if (status === 'cached') return 'border-emerald-700/70 bg-emerald-950/40 text-emerald-200'
+  if (status === 'unsupported') return 'border-slate-700 bg-slate-950/60 text-slate-400'
+  return 'border-blue-700/70 bg-blue-950/40 text-blue-200'
+}
+
+function languageStatusLabel(detectedLanguage: ComparisonLanguage, comparisonLanguage: ComparisonLanguage): string {
+  if (detectedLanguage === 'chinese' && comparisonLanguage === 'ambiguous') return 'Japanese or Chinese — please choose'
+  if (comparisonLanguage === 'japanese') return 'Japanese detected'
+  if (comparisonLanguage === 'chinese') return 'Chinese detected'
+  if (comparisonLanguage === 'korean') return 'Korean detected'
+  if (comparisonLanguage === 'thai') return 'Thai detected'
+  return 'Language not detected'
+}
+
 export function ProviderComparison({ providers, cache }: ProviderComparisonProps) {
   const [inputText, setInputText] = useState(examples[0].text)
   const [hanLanguageHint, setHanLanguageHint] = useState<HanLanguageHint>('japanese')
@@ -50,6 +67,7 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
 
   const detectedLanguage = detectComparisonLanguage(inputText)
   const comparisonLanguage = resolveComparisonLanguage(inputText, hanLanguageHint)
+  const isComparisonBlocked = !inputText.trim() || comparisonLanguage === 'ambiguous'
 
   const providerMatchesLanguage = (provider: RomanizerProvider, language: ComparisonLanguage): boolean => {
     if (language === 'japanese' && provider.id === 'chinese-pinyin-pro') return false
@@ -179,39 +197,62 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
         <button
           type="button"
           onClick={() => void compareProviders()}
-          disabled={isComparing}
+          disabled={isComparing || isComparisonBlocked}
           className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
           {isComparing ? 'Comparing providers…' : 'Compare providers'}
         </button>
-        {detectedLanguage === 'chinese' && comparisonLanguage === 'ambiguous' && (
-          <label htmlFor="comparison-language-hint" className="flex flex-wrap items-center gap-2 text-sm text-amber-200">
-            <span>Han-only text is ambiguous; choose a language</span>
-            <select
-              id="comparison-language-hint"
-              aria-label="Han-only language hint"
-              value={hanLanguageHint ?? 'auto'}
-              onChange={(event) => {
-                const value = event.target.value
-                setHanLanguageHint(value === 'japanese' || value === 'chinese' ? value : undefined)
-                setResults({})
-              }}
-              className="rounded-lg border border-amber-700/70 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
-            >
-              <option value="auto">Auto (ambiguous)</option>
-              <option value="japanese">Japanese</option>
-              <option value="chinese">Chinese</option>
-            </select>
-          </label>
+        {detectedLanguage === 'chinese' && (
+          <fieldset className="rounded-lg border border-amber-700/70 bg-amber-950/20 p-3" aria-label="Han-only language choice">
+            <legend className="px-1 text-sm text-amber-200">Japanese or Chinese — choose one</legend>
+            <div className="flex flex-wrap gap-2">
+              {(['japanese', 'chinese'] as const).map((language) => {
+                const isActive = hanLanguageHint === language
+                const label = language === 'japanese' ? 'Choose Japanese' : 'Choose Chinese'
+                return (
+                  <label
+                    key={language}
+                    className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition focus-within:ring-2 focus-within:ring-amber-300 ${
+                      isActive
+                        ? 'border-blue-400 bg-blue-500/20 text-blue-100'
+                        : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-blue-500'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="han-only-language"
+                      value={language}
+                      aria-label={label}
+                      checked={isActive}
+                      onChange={() => {
+                        setHanLanguageHint(language)
+                        setResults({})
+                      }}
+                      className="sr-only"
+                    />
+                    {language === 'japanese' ? 'Japanese' : 'Chinese'}
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
         )}
       </div>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-2">
+      <p
+        className="mt-6 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-300"
+        aria-live="polite"
+        aria-label="Detected language"
+      >
+        {languageStatusLabel(detectedLanguage, comparisonLanguage)}
+      </p>
+
+      <div className="mt-4 grid items-stretch gap-3 md:grid-cols-2">
         {providers.map((provider) => {
           const result = results[provider.id]
           const status = result?.status ?? getInitialStatus(provider)
           return (
-            <article key={provider.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+            <article key={provider.id} className="flex h-full min-h-44 flex-col rounded-xl border border-slate-800 bg-slate-900/70 p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h3 className="font-semibold text-blue-100">{provider.displayName}</h3>
@@ -219,7 +260,7 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
                     {provider.id} · v{provider.version ?? 'unspecified'}
                   </p>
                 </div>
-                <span className="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-300">
+                <span className={`rounded-full border px-2 py-1 text-xs ${statusClassName(status)}`}>
                   {statusLabel(status)}
                 </span>
               </div>
