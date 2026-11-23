@@ -187,8 +187,8 @@ describe('ProviderComparison', () => {
       id: 'japanese-kuroshiro',
       displayName: 'Kuroshiro + Kuromoji',
       supports: () => true,
-      romanize: ({ text }) => new Promise((resolve) => {
-        resolveRomanization = resolve
+      romanize: ({ text }) => new Promise<void>((resolve) => {
+        resolveRomanization = () => resolve()
       }).then(() => ({
         originalText: text,
         romanizedText: 'pending result',
@@ -223,5 +223,154 @@ describe('ProviderComparison', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
 
     await waitFor(() => expect(screen.getByText('Cached locally')).toBeInTheDocument())
+  })
+
+  it('clears comparison results while preserving the original input and detected language', async () => {
+    const local = provider('japanese-kuroshiro', 'Kuroshiro + Kuromoji', '青い朝が来る', 'temporary reading')
+
+    render(<ProviderComparison providers={[local]} cache={new MemoryCache()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
+    await waitFor(() => expect(screen.getByText('temporary reading')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear comparison' }))
+
+    expect(screen.getByDisplayValue('青い朝が来る')).toBeInTheDocument()
+    expect(screen.getByLabelText('Detected language')).toHaveTextContent('Japanese detected')
+    expect(screen.queryByText('temporary reading')).not.toBeInTheDocument()
+    expect(screen.getByText('Supported')).toBeInTheDocument()
+  })
+
+  it('does not let a reset during loading repopulate the comparison', async () => {
+    let resolveRomanization: (() => void) | undefined
+    const pending: RomanizerProvider = {
+      id: 'japanese-kuroshiro',
+      displayName: 'Kuroshiro + Kuromoji',
+      supports: () => true,
+      romanize: ({ text }) => new Promise<void>((resolve) => {
+        resolveRomanization = () => resolve()
+      }).then(() => ({
+        originalText: text,
+        romanizedText: 'stale reading',
+        providerId: 'japanese-kuroshiro',
+        status: 'complete' as const,
+        generation: 'deterministic' as const,
+      })),
+    }
+
+    render(<ProviderComparison providers={[pending]} cache={new MemoryCache()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
+    await waitFor(() => expect(resolveRomanization).toBeDefined())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear comparison' }))
+    resolveRomanization?.()
+
+    await waitFor(() => expect(screen.getByText('Supported')).toBeInTheDocument())
+    expect(screen.queryByText('stale reading')).not.toBeInTheDocument()
+  })
+
+  it('retries only a failed provider and preserves successful results', async () => {
+    const successful = provider('japanese-kuroshiro', 'Kuroshiro + Kuromoji', '青い朝が来る', 'successful reading')
+    let attempts = 0
+    const failing: RomanizerProvider = {
+      id: 'failing-provider',
+      displayName: 'Failing provider',
+      supports: () => true,
+      romanize: vi.fn(async ({ text }) => {
+        attempts += 1
+        if (attempts === 1) throw new Error('temporary failure')
+        return {
+          originalText: text,
+          romanizedText: 'recovered reading',
+          providerId: 'failing-provider',
+          status: 'complete' as const,
+          generation: 'deterministic' as const,
+        }
+      }),
+    }
+
+    render(<ProviderComparison providers={[successful, failing]} cache={new MemoryCache()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
+    await waitFor(() => expect(screen.getByText('successful reading')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('temporary failure'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Failing provider' }))
+    expect(screen.getByText('successful reading')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('recovered reading')).toBeInTheDocument())
+    expect(successful.romanize).toBeDefined()
+    expect(failing.romanize).toHaveBeenCalledTimes(2)
+  })
+
+  it('prevents duplicate comparison requests while loading', async () => {
+    let resolveRomanization: (() => void) | undefined
+    const romanize = vi.fn(({ text }: { text: string }) => new Promise<void>((resolve) => {
+      resolveRomanization = () => resolve()
+    }).then(() => ({
+      originalText: text,
+      romanizedText: 'one request',
+      providerId: 'japanese-kuroshiro',
+      status: 'complete' as const,
+      generation: 'deterministic' as const,
+    })))
+    const pending: RomanizerProvider = {
+      id: 'japanese-kuroshiro',
+      displayName: 'Kuroshiro + Kuromoji',
+      supports: () => true,
+      romanize,
+    }
+
+    render(<ProviderComparison providers={[pending]} cache={new MemoryCache()} />)
+    const compareButton = screen.getByRole('button', { name: 'Compare providers' })
+    fireEvent.click(compareButton)
+    fireEvent.click(compareButton)
+
+    await waitFor(() => expect(romanize).toHaveBeenCalledTimes(1))
+    resolveRomanization?.()
+    await waitFor(() => expect(screen.getByText('one request')).toBeInTheDocument())
+  })
+
+  it('ignores an old result after a new comparison starts', async () => {
+    let resolveRomanization: (() => void) | undefined
+    const oldProvider: RomanizerProvider = {
+      id: 'japanese-kuroshiro',
+      displayName: 'Kuroshiro + Kuromoji',
+      supports: ({ text }) => text === '青い朝が来る',
+      romanize: ({ text }) => new Promise<void>((resolve) => {
+        resolveRomanization = () => resolve()
+      }).then(() => ({
+        originalText: text,
+        romanizedText: 'old reading',
+        providerId: 'japanese-kuroshiro',
+        status: 'complete' as const,
+        generation: 'deterministic' as const,
+      })),
+    }
+    const chinese = provider('chinese-pinyin-pro', 'Pinyin Pro', '蓝色的早晨来了', 'new reading')
+
+    render(<ProviderComparison providers={[oldProvider, chinese]} cache={new MemoryCache()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
+    await waitFor(() => expect(resolveRomanization).toBeDefined())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chinese' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
+    resolveRomanization?.()
+
+    await waitFor(() => expect(screen.getByText('new reading')).toBeInTheDocument())
+    expect(screen.queryByText('old reading')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Detected language')).toHaveTextContent('Chinese detected')
+  })
+
+  it('does not call an unsupported Azure provider for non-Thai input', async () => {
+    const fetchFn = vi.fn()
+    const azure = new AzureTransliterationProvider({
+      workerUrl: 'https://proxy.example.workers.dev',
+      profile: { language: 'th', fromScript: 'Thai', toScript: 'Latn', displayName: 'Thai' },
+      fetchFn,
+    })
+
+    render(<ProviderComparison providers={[azure]} cache={new MemoryCache()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
+
+    await waitFor(() => expect(screen.getByText('Not supported')).toBeInTheDocument())
+    expect(fetchFn).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { RomanizationCache } from '../../domain/romanization/romanization-cache'
 import { createRomanizationCacheKey } from '../../domain/romanization/romanization-cache-key'
 import type { RomanizerProvider } from '../../domain/romanization/romanizer-provider'
@@ -58,8 +58,15 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
   const [hanLanguageHint, setHanLanguageHint] = useState<HanLanguageHint>('japanese')
   const [results, setResults] = useState<Record<string, ComparisonResult>>({})
   const [isComparing, setIsComparing] = useState(false)
+  const runIdRef = useRef(0)
+
+  const invalidateCurrentRun = () => {
+    runIdRef.current += 1
+    setIsComparing(false)
+  }
 
   const updateInputText = (text: string, nextHanLanguageHint?: HanLanguageHint) => {
+    invalidateCurrentRun()
     setInputText(text)
     setHanLanguageHint(nextHanLanguageHint)
     setResults({})
@@ -68,6 +75,10 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
   const detectedLanguage = detectComparisonLanguage(inputText)
   const comparisonLanguage = resolveComparisonLanguage(inputText, hanLanguageHint)
   const isComparisonBlocked = !inputText.trim() || comparisonLanguage === 'ambiguous'
+
+  const providerMatchesCurrentLanguage = (provider: RomanizerProvider): boolean => {
+    return comparisonLanguage !== 'ambiguous' && providerMatchesLanguage(provider, comparisonLanguage)
+  }
 
   const providerMatchesLanguage = (provider: RomanizerProvider, language: ComparisonLanguage): boolean => {
     if (language === 'japanese' && provider.id === 'chinese-pinyin-pro') return false
@@ -92,12 +103,72 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
     return providerMatchesLanguage(provider, comparisonLanguage) ? 'supported' : 'unsupported'
   }
 
-  const compareProviders = async () => {
-    const text = inputText
-    const language = comparisonLanguage
-    const supportedProviders = providers.filter((provider) => {
-      return Boolean(text.trim()) && language !== 'ambiguous' && providerMatchesLanguage(provider, language)
+  const runProvider = async (provider: RomanizerProvider, text: string, runId: number) => {
+    const isCurrentRun = () => runIdRef.current === runId
+    if (!isCurrentRun()) return
+
+    setResults((current) => ({ ...current, [provider.id]: { status: 'loading' } }))
+    const providerVersion = provider.version ?? '1.0.0'
+    const cacheKey = createRomanizationCacheKey({
+      sourceId: 'provider-comparison',
+      originalText: text,
+      providerId: provider.id,
+      providerVersion,
     })
+
+    try {
+      const cachedEntry = await cache.get(cacheKey)
+      if (!isCurrentRun()) return
+      if (cachedEntry?.originalText === text) {
+        setResults((current) => ({
+          ...current,
+          [provider.id]: { status: 'cached', reading: cachedEntry.romanizedText },
+        }))
+        return
+      }
+
+      const result = await provider.romanize({ text })
+      if (!isCurrentRun()) return
+      if (result.status !== 'complete') {
+        setResults((current) => ({ ...current, [provider.id]: { status: 'unsupported' } }))
+        return
+      }
+
+      const now = Date.now()
+      try {
+        await cache.set(cacheKey, {
+          cacheKey,
+          sourceId: 'provider-comparison',
+          providerId: provider.id,
+          providerVersion,
+          originalText: text,
+          romanizedText: result.romanizedText,
+          createdAt: now,
+          updatedAt: now,
+        })
+      } catch {
+        // Comparison remains usable when IndexedDB is unavailable.
+      }
+      if (!isCurrentRun()) return
+      setResults((current) => ({ ...current, [provider.id]: { status: 'complete', reading: result.romanizedText } }))
+    } catch (error) {
+      if (!isCurrentRun()) return
+      setResults((current) => ({
+        ...current,
+        [provider.id]: {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Provider comparison failed safely.',
+        },
+      }))
+    }
+  }
+
+  const compareProviders = async () => {
+    if (isComparing || isComparisonBlocked) return
+
+    const text = inputText
+    const runId = ++runIdRef.current
+    const supportedProviders = providers.filter((provider) => Boolean(text.trim()) && providerMatchesCurrentLanguage(provider))
 
     setIsComparing(true)
     setResults(Object.fromEntries(providers.map((provider) => [
@@ -105,59 +176,21 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
       { status: supportedProviders.includes(provider) ? 'loading' : 'unsupported' },
     ])))
 
-    await Promise.all(supportedProviders.map(async (provider) => {
-      const providerVersion = provider.version ?? '1.0.0'
-      const cacheKey = createRomanizationCacheKey({
-        sourceId: 'provider-comparison',
-        originalText: text,
-        providerId: provider.id,
-        providerVersion,
-      })
+    await Promise.all(supportedProviders.map((provider) => runProvider(provider, text, runId)))
 
-      try {
-        const cachedEntry = await cache.get(cacheKey)
-        if (cachedEntry?.originalText === text) {
-          setResults((current) => ({
-            ...current,
-            [provider.id]: { status: 'cached', reading: cachedEntry.romanizedText },
-          }))
-          return
-        }
+    if (runIdRef.current === runId) setIsComparing(false)
+  }
 
-        const result = await provider.romanize({ text })
-        if (result.status !== 'complete') {
-          setResults((current) => ({ ...current, [provider.id]: { status: 'unsupported' } }))
-          return
-        }
+  const retryProvider = async (provider: RomanizerProvider) => {
+    if (isComparing || results[provider.id]?.status === 'loading' || !providerMatchesCurrentLanguage(provider)) return
 
-        const now = Date.now()
-        try {
-          await cache.set(cacheKey, {
-            cacheKey,
-            sourceId: 'provider-comparison',
-            providerId: provider.id,
-            providerVersion,
-            originalText: text,
-            romanizedText: result.romanizedText,
-            createdAt: now,
-            updatedAt: now,
-          })
-        } catch {
-          // Comparison remains usable when IndexedDB is unavailable.
-        }
-        setResults((current) => ({ ...current, [provider.id]: { status: 'complete', reading: result.romanizedText } }))
-      } catch (error) {
-        setResults((current) => ({
-          ...current,
-          [provider.id]: {
-            status: 'error',
-            error: error instanceof Error ? error.message : 'Provider comparison failed safely.',
-          },
-        }))
-      }
-    }))
+    const runId = ++runIdRef.current
+    await runProvider(provider, inputText, runId)
+  }
 
-    setIsComparing(false)
+  const clearComparison = () => {
+    invalidateCurrentRun()
+    setResults({})
   }
 
   return (
@@ -202,6 +235,13 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
         >
           {isComparing ? 'Comparing providers…' : 'Compare providers'}
         </button>
+        <button
+          type="button"
+          onClick={clearComparison}
+          className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-blue-500 hover:text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
+        >
+          Clear comparison
+        </button>
         {detectedLanguage === 'chinese' && (
           <fieldset className="rounded-lg border border-amber-700/70 bg-amber-950/20 p-3" aria-label="Han-only language choice">
             <legend className="px-1 text-sm text-amber-200">Japanese or Chinese — choose one</legend>
@@ -225,6 +265,7 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
                       aria-label={label}
                       checked={isActive}
                       onChange={() => {
+                        invalidateCurrentRun()
                         setHanLanguageHint(language)
                         setResults({})
                       }}
@@ -271,6 +312,16 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
                 <p className="mt-3 rounded-lg bg-slate-950 px-3 py-2 text-sm italic text-slate-200">{result.reading}</p>
               )}
               {result?.error && <p role="alert" className="mt-3 text-sm text-red-200">{result.error}</p>}
+              {result?.status === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => void retryProvider(provider)}
+                  disabled={isComparing}
+                  className="mt-auto pt-4 text-left text-sm font-semibold text-blue-300 hover:text-blue-200 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  Retry {provider.displayName}
+                </button>
+              )}
             </article>
           )
         })}
