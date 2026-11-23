@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  root:
+    name: Root tests and build
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the commit that triggered this workflow.
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # Use the project's CI Node.js line and cache root npm downloads.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Install exactly what the committed lockfile specifies.
+      - name: Install root dependencies
+        run: npm ci
+
+      # Verify the React application and production bundle.
+      - name: Run root tests
+        run: npm run test
+
+      - name: Build root application
+        run: npm run build
+
+  worker:
+    name: Worker tests and checks
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the same repository revision for the Worker job.
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # Cache dependencies using the Worker lockfile.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: proxy/package-lock.json
+
+      # Install the Worker dependencies without using secrets.
+      - name: Install Worker dependencies
+        working-directory: proxy
+        run: npm ci
+
+      # Run the Worker unit tests and its strict TypeScript check.
+      - name: Run Worker tests
+        working-directory: proxy
+        run: npm test
+
+      - name: Check Worker TypeScript
+        working-directory: proxy
+        run: npx tsc --noEmit
+
+      # Generate Wrangler types; this does not deploy or require authentication.
+      - name: Generate Wrangler types
+        working-directory: proxy
+        run: npm run types
