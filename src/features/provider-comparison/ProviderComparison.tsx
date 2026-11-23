@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { RomanizationCache } from '../../domain/romanization/romanization-cache'
 import { createRomanizationCacheKey } from '../../domain/romanization/romanization-cache-key'
 import type { RomanizerProvider } from '../../domain/romanization/romanizer-provider'
+import { detectComparisonLanguage, resolveComparisonLanguage, type ComparisonLanguage, type HanLanguageHint } from './comparison-language'
 
 type ComparisonStatus = 'supported' | 'unsupported' | 'loading' | 'complete' | 'cached' | 'error'
 
@@ -37,31 +38,47 @@ function statusLabel(status: ComparisonStatus): string {
 
 export function ProviderComparison({ providers, cache }: ProviderComparisonProps) {
   const [inputText, setInputText] = useState(examples[0].text)
+  const [hanLanguageHint, setHanLanguageHint] = useState<HanLanguageHint>('japanese')
   const [results, setResults] = useState<Record<string, ComparisonResult>>({})
   const [isComparing, setIsComparing] = useState(false)
 
-  const updateInputText = (text: string) => {
+  const updateInputText = (text: string, nextHanLanguageHint?: HanLanguageHint) => {
     setInputText(text)
+    setHanLanguageHint(nextHanLanguageHint)
     setResults({})
   }
 
-  const getInitialStatus = (provider: RomanizerProvider): ComparisonStatus => {
-    if (!inputText.trim()) return 'unsupported'
+  const detectedLanguage = detectComparisonLanguage(inputText)
+  const comparisonLanguage = resolveComparisonLanguage(inputText, hanLanguageHint)
+
+  const providerMatchesLanguage = (provider: RomanizerProvider, language: ComparisonLanguage): boolean => {
+    if (language === 'japanese' && provider.id === 'chinese-pinyin-pro') return false
+    if (language === 'japanese' && provider.id === 'japanese-kuroshiro') return true
+    if (language === 'chinese' && provider.id === 'japanese-kuroshiro') return false
+    if (language === 'chinese' && provider.id === 'chinese-pinyin-pro') return true
+    if (language === 'korean') return provider.id === 'korean-local'
+    if (language === 'thai') return provider.id === 'azure-transliteration'
+    if (language === 'ambiguous' && (provider.id === 'japanese-kuroshiro' || provider.id === 'chinese-pinyin-pro')) return false
     try {
-      return provider.supports({ text: inputText }) ? 'supported' : 'unsupported'
+      return provider.supports({ text: inputText })
     } catch {
-      return 'error'
+      return false
     }
+  }
+
+  const getInitialStatus = (provider: RomanizerProvider): ComparisonStatus => {
+    if (!inputText.trim() || comparisonLanguage === 'unknown') return 'unsupported'
+    if (comparisonLanguage === 'ambiguous' && (provider.id === 'japanese-kuroshiro' || provider.id === 'chinese-pinyin-pro')) {
+      return 'unsupported'
+    }
+    return providerMatchesLanguage(provider, comparisonLanguage) ? 'supported' : 'unsupported'
   }
 
   const compareProviders = async () => {
     const text = inputText
+    const language = comparisonLanguage
     const supportedProviders = providers.filter((provider) => {
-      try {
-        return Boolean(text.trim()) && provider.supports({ text })
-      } catch {
-        return false
-      }
+      return Boolean(text.trim()) && language !== 'ambiguous' && providerMatchesLanguage(provider, language)
     })
 
     setIsComparing(true)
@@ -152,7 +169,7 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
             <button
               key={example.label}
               type="button"
-              onClick={() => updateInputText(example.text)}
+              onClick={() => updateInputText(example.text, example.label === 'Japanese' ? 'japanese' : example.label === 'Chinese' ? 'chinese' : undefined)}
               className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:border-blue-500 hover:text-blue-200"
             >
               {example.label}
@@ -167,6 +184,26 @@ export function ProviderComparison({ providers, cache }: ProviderComparisonProps
         >
           {isComparing ? 'Comparing providers…' : 'Compare providers'}
         </button>
+        {detectedLanguage === 'chinese' && comparisonLanguage === 'ambiguous' && (
+          <label htmlFor="comparison-language-hint" className="flex flex-wrap items-center gap-2 text-sm text-amber-200">
+            <span>Han-only text is ambiguous; choose a language</span>
+            <select
+              id="comparison-language-hint"
+              aria-label="Han-only language hint"
+              value={hanLanguageHint ?? 'auto'}
+              onChange={(event) => {
+                const value = event.target.value
+                setHanLanguageHint(value === 'japanese' || value === 'chinese' ? value : undefined)
+                setResults({})
+              }}
+              className="rounded-lg border border-amber-700/70 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
+            >
+              <option value="auto">Auto (ambiguous)</option>
+              <option value="japanese">Japanese</option>
+              <option value="chinese">Chinese</option>
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="mt-6 grid gap-3 md:grid-cols-2">

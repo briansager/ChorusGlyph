@@ -67,6 +67,32 @@ describe('ProviderComparison', () => {
     expect(screen.getByDisplayValue('青い朝が来る')).toBeInTheDocument()
   })
 
+  it('selects only the Chinese provider for the Chinese preset', () => {
+    const providers = [
+      provider('japanese-kuroshiro', 'Kuroshiro + Kuromoji', '青い朝が来る', 'aoiasagakuru'),
+      provider('chinese-pinyin-pro', 'Pinyin Pro', '蓝色的早晨来了', 'lán sè de zǎo chén lái le'),
+    ]
+
+    render(<ProviderComparison providers={providers} cache={new MemoryCache()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Chinese' }))
+
+    expect(screen.getByText('Pinyin Pro').parentElement?.parentElement).toHaveTextContent('Supported')
+    expect(screen.getByText('Kuroshiro + Kuromoji').parentElement?.parentElement).toHaveTextContent('Not supported')
+  })
+
+  it('requires a manual choice for Kanji-only text', () => {
+    const providers = [
+      provider('japanese-kuroshiro', 'Kuroshiro + Kuromoji', '東京', 'tōkyō'),
+      provider('chinese-pinyin-pro', 'Pinyin Pro', '東京', 'dōng jīng'),
+    ]
+
+    render(<ProviderComparison providers={providers} cache={new MemoryCache()} />)
+    fireEvent.change(screen.getByLabelText('Original test text'), { target: { value: '東京' } })
+
+    expect(screen.getByLabelText('Han-only language hint')).toHaveValue('auto')
+    expect(screen.getAllByText('Not supported')).toHaveLength(2)
+  })
+
   it('shows a clear unsupported state and never calls that provider', async () => {
     const romanize = vi.fn()
     const unsupported: RomanizerProvider = {
