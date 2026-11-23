@@ -1,0 +1,60 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy Pages site
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Check out the commit that triggered this deployment.
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # Configure the GitHub Pages deployment environment.
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      # Install the same Node.js line used by CI and the committed lockfile.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Pages needs the repository subpath; Vercel uses the default root path.
+      - name: Build Pages frontend
+        env:
+          VITE_BASE_PATH: /ChorusGlyph/
+          VITE_TRANSLITERATION_PROXY_URL: https://chorusglyph-transliteration-proxy.chorusglyph.workers.dev
+        run: |
+          npm run build
+          cp dist/index.html dist/404.html
+
+      # Upload only the generated static frontend.
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+      # Publish the artifact through the GitHub Pages Actions deployment.
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
