@@ -7,6 +7,7 @@ import { createRomanizationCacheKey } from '../domain/romanization/romanization-
 import { createReadingOverrideKey } from '../domain/romanization/reading-override-key'
 import { createRomanizerRegistry } from '../domain/romanization/romanizer-registry'
 import { LyricsSourcePanel } from '../features/lyrics-source/LyricsSourcePanel'
+import { ProviderComparison } from '../features/provider-comparison/ProviderComparison'
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
 import { sampleLyricsDocument } from '../features/synced-lyrics/lyric-fixtures'
 
@@ -247,6 +248,7 @@ export function App() {
                 timingOffset={timingOffset}
                 onTimingOffsetChange={updateTimingOffset}
               />
+              <ProviderComparison providers={romanizerRegistry.providers} cache={romanizationCache} />
             </div>
           </div>
         </section>

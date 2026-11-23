@@ -16,6 +16,7 @@ export type AzureTransliterationProviderOptions = {
 const japanesePattern = /[\u3040-\u30ff]/u
 const koreanPattern = /[\uac00-\ud7a3]/u
 const hanPattern = /[\u3400-\u4dbf\u4e00-\u9fff\u{20000}-\u{2a6df}]/u
+const thaiPattern = /[\u0e00-\u0e7f]/u
 
 export class AzureTransliterationProvider implements RomanizerProvider {
   readonly id = 'azure-transliteration'
@@ -40,6 +41,7 @@ export class AzureTransliterationProvider implements RomanizerProvider {
     if (this.profile.language === 'ja' && japanesePattern.test(input.text)) return false
     if (this.profile.language === 'ko' && koreanPattern.test(input.text)) return false
     if ((this.profile.language === 'zh-Hans' || this.profile.language === 'zh-Hant') && hanPattern.test(input.text)) return false
+    if (this.profile.language === 'th' && !thaiPattern.test(input.text)) return false
     return true
   }
 
