@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { LyricsDocument } from '../domain/lyrics/lyrics-types'
+import { loadTimingOffset, saveTimingOffset } from '../domain/now-playing/timing-offset'
 import { IndexedDbRomanizationCache } from '../domain/romanization/indexeddb-romanization-cache'
 import { IndexedDbReadingOverrideStore } from '../domain/romanization/indexeddb-reading-override-store'
 import { createRomanizationCacheKey } from '../domain/romanization/romanization-cache-key'
@@ -31,6 +32,12 @@ export function App() {
   const [isRomanizing, setIsRomanizing] = useState(false)
   const [romanizationError, setRomanizationError] = useState<string>()
   const [romanizationProviderId, setRomanizationProviderId] = useState('japanese-kuroshiro')
+  const [timingOffset, setTimingOffset] = useState(loadTimingOffset)
+
+  const updateTimingOffset = (nextOffset: number) => {
+    setTimingOffset(nextOffset)
+    saveTimingOffset(nextOffset)
+  }
 
   const restoreReadingOverrides = async (document: LyricsDocument, providerId: string) => {
     const restoredReadings: Record<string, string> = {}
@@ -237,6 +244,8 @@ export function App() {
                   void restoreReadingOverrides(lyricsDocument, providerId)
                 }}
                 onReadingOverrideChange={updateReadingOverride}
+                timingOffset={timingOffset}
+                onTimingOffsetChange={updateTimingOffset}
               />
             </div>
           </div>

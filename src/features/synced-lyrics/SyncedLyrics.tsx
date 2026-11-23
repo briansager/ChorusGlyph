@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LyricLine } from '../../domain/lyrics/lyric-types'
 import { ManualTimer } from '../../domain/now-playing/manual-timer'
+import { clampTimingOffset, MAX_TIMING_OFFSET, MIN_TIMING_OFFSET, TIMING_OFFSET_STEP } from '../../domain/now-playing/timing-offset'
 
 type SyncedLyricsProps = {
   lines: LyricLine[]
@@ -15,11 +16,14 @@ type SyncedLyricsProps = {
   romanizationOptions?: Array<{ id: string; displayName: string }>
   onRomanizationProviderChange?: (providerId: string) => void
   onReadingOverrideChange?: (lineId: string, readingText: string) => void | Promise<void>
+  timingOffset?: number
+  onTimingOffsetChange?: (offset: number) => void
 }
 
-function getActiveLineId(lines: LyricLine[], currentTime: number): string | undefined {
+function getActiveLineId(lines: LyricLine[], currentTime: number, timingOffset: number): string | undefined {
+  const adjustedTime = currentTime - timingOffset
   return lines.find(
-    (line) => currentTime >= line.startTime && (line.endTime === undefined || currentTime < line.endTime),
+    (line) => adjustedTime >= line.startTime && (line.endTime === undefined || adjustedTime < line.endTime),
   )?.id
 }
 
@@ -36,6 +40,8 @@ export function SyncedLyrics({
   romanizationOptions = [],
   onRomanizationProviderChange,
   onReadingOverrideChange,
+  timingOffset = 0,
+  onTimingOffsetChange,
 }: SyncedLyricsProps) {
   const timerRef = useRef<ManualTimer | null>(null)
   if (!timerRef.current) timerRef.current = timer ?? new ManualTimer()
@@ -62,7 +68,7 @@ export function SyncedLyrics({
     }
   }, [playing])
 
-  const activeLineId = getActiveLineId(lines, currentTime)
+  const activeLineId = getActiveLineId(lines, currentTime, timingOffset)
 
   const togglePlayback = () => {
     if (timerRef.current?.isPlaying()) {
@@ -191,6 +197,31 @@ export function SyncedLyrics({
         >
           Reset
         </button>
+        {onTimingOffsetChange && (
+          <div className="flex min-w-64 flex-1 flex-wrap items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+            <label htmlFor="timing-offset" className="text-sm text-slate-300">
+              Timing offset: <span className="font-mono text-blue-200">{timingOffset >= 0 ? '+' : ''}{timingOffset.toFixed(2)}s</span>
+            </label>
+            <input
+              id="timing-offset"
+              aria-label="Timing offset"
+              type="range"
+              min={MIN_TIMING_OFFSET}
+              max={MAX_TIMING_OFFSET}
+              step={TIMING_OFFSET_STEP}
+              value={timingOffset}
+              onChange={(event) => onTimingOffsetChange(clampTimingOffset(Number(event.target.value)))}
+              className="min-w-40 flex-1 accent-blue-500"
+            />
+            <button
+              type="button"
+              onClick={() => onTimingOffsetChange(0)}
+              className="text-xs font-semibold text-blue-300 hover:text-blue-200"
+            >
+              Reset offset
+            </button>
+          </div>
+        )}
         {onRomanize && (
           <>
             {onRomanizationProviderChange && (

@@ -21,6 +21,42 @@ describe('SyncedLyrics', () => {
     expect(screen.getByLabelText('Current timer position')).toHaveTextContent('2.25s')
   })
 
+  it('delays line activation with a positive offset without changing timer position', () => {
+    const timer = new ManualTimer(() => 0)
+    timer.seek(2.25)
+
+    render(<SyncedLyrics lines={lines} timer={timer} timingOffset={0.5} />)
+
+    expect(screen.getByText('First original line')).toHaveAttribute('data-active', 'true')
+    expect(screen.getByLabelText('Current timer position')).toHaveTextContent('2.25s')
+  })
+
+  it('advances line activation with a negative offset', () => {
+    const timer = new ManualTimer(() => 0)
+    timer.seek(1.75)
+
+    render(<SyncedLyrics lines={lines} timer={timer} timingOffset={-0.5} />)
+
+    expect(screen.getByText('Second original line')).toHaveAttribute('data-active', 'true')
+  })
+
+  it('resets the timing offset to zero', () => {
+    const onTimingOffsetChange = vi.fn()
+
+    render(
+      <SyncedLyrics
+        lines={lines}
+        timingOffset={0.5}
+        onTimingOffsetChange={onTimingOffsetChange}
+      />,
+    )
+
+    expect(screen.getByLabelText('Timing offset')).toHaveValue('0.5')
+    expect(screen.getByLabelText('Timing offset').closest('div')).toHaveTextContent('+0.50s')
+    fireEvent.click(screen.getByRole('button', { name: 'Reset offset' }))
+    expect(onTimingOffsetChange).toHaveBeenCalledWith(0)
+  })
+
   it('provides play, pause, and reset controls', () => {
     render(<SyncedLyrics lines={lines} timer={new ManualTimer(() => 0)} />)
 
