@@ -1,9 +1,13 @@
+import type { LyricsDocument } from '../../domain/lyrics/lyrics-types'
+import { Icon } from '../../shared/ui/Icon'
+import { languageProviderLabel } from '../../shared/ui/provider-labels'
 import { useEffect, useRef, useState } from 'react'
 import type { LyricLine } from '../../domain/lyrics/lyric-types'
 import { ManualTimer } from '../../domain/now-playing/manual-timer'
 import { clampTimingOffset, MAX_TIMING_OFFSET, MIN_TIMING_OFFSET, TIMING_OFFSET_STEP } from '../../domain/now-playing/timing-offset'
 
 type SyncedLyricsProps = {
+  document?: LyricsDocument
   lines: LyricLine[]
   timer?: ManualTimer
   romanizedLines?: Record<string, string>
@@ -13,7 +17,7 @@ type SyncedLyricsProps = {
   romanizationError?: string
   onRomanize?: () => void
   romanizationProviderId?: string
-  romanizationOptions?: Array<{ id: string; displayName: string }>
+  romanizationOptions?: Array<{ id: string; displayName: string; version?: string }>
   onRomanizationProviderChange?: (providerId: string) => void
   onReadingOverrideChange?: (lineId: string, readingText: string) => void | Promise<void>
   timingOffset?: number
@@ -27,7 +31,14 @@ function getActiveLineId(lines: LyricLine[], currentTime: number, timingOffset: 
   )?.id
 }
 
+function isValidOffsetEntry(value: string): boolean {
+  const number = Number(value)
+  const steps = (number - MIN_TIMING_OFFSET) / TIMING_OFFSET_STEP
+  return value.trim() !== '' && Number.isFinite(number) && number >= MIN_TIMING_OFFSET && number <= MAX_TIMING_OFFSET && Math.abs(steps - Math.round(steps)) < 0.00001
+}
+
 export function SyncedLyrics({
+  document,
   lines,
   timer,
   romanizedLines = {},
@@ -50,6 +61,9 @@ export function SyncedLyrics({
   const [playing, setPlaying] = useState(false)
   const [editingLineId, setEditingLineId] = useState<string>()
   const [draftReading, setDraftReading] = useState('')
+  const [offsetDraft, setOffsetDraft] = useState(timingOffset.toFixed(2))
+  useEffect(() => setOffsetDraft(timingOffset.toFixed(2)), [timingOffset])
+  const offsetValid = isValidOffsetEntry(offsetDraft)
 
   useEffect(() => {
     let frameId: number | undefined
@@ -88,13 +102,15 @@ export function SyncedLyrics({
   }
 
   return (
-    <section className="rounded-2xl border border-blue-800/60 bg-slate-950/70 p-5 sm:p-7" aria-label="Synchronized lyrics">
+    <section id="active-lyrics" className="rounded-2xl border border-blue-800/60 bg-slate-950/70 p-5 sm:p-7" aria-label="Synchronized lyrics">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-blue-400">Demo lyrics</p>
+          <h2><Icon name="lyrics" />Active lyrics</h2>
+          <p className="active-title">{document?.title}{document?.artist ? ` · ${document.artist}` : ''}</p>
+          <p className="helper">Source: {({ sample: 'Sample · Original demo lyrics', 'paste-text': 'Pasted text', 'lrc-file': 'Local LRC file', lrclib: 'LRCLIB' } as Record<string, string>)[document?.sourceId ?? 'sample'] ?? document?.sourceId}</p>
           <p className="mt-1 text-sm text-slate-400">Timed lines with optional local readings</p>
         </div>
-        <output className="rounded-lg bg-slate-800 px-3 py-2 font-mono text-sm text-blue-200" aria-label="Current timer position">
+        <output className="rounded-lg bg-slate-800 px-3 py-2 font-mono text-sm text-blue-200" aria-label="Current timer position" aria-live="off" role="timer">
           {currentTime.toFixed(2)}s
         </output>
       </div>
@@ -105,7 +121,7 @@ export function SyncedLyrics({
           return (
             <div key={line.id}>
               <p
-                className={`rounded-xl px-4 py-3 text-base transition sm:text-lg ${
+                className={`lyric-line ${
                 isActive
                   ? 'bg-blue-600/30 font-semibold text-blue-100 ring-1 ring-blue-400/60'
                   : 'text-slate-400'
@@ -188,17 +204,17 @@ export function SyncedLyrics({
           onClick={togglePlayback}
           className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
-          {playing ? 'Pause' : 'Play'}
+          <Icon name={playing ? 'pause' : 'play'} />{playing ? 'Pause lyric preview' : 'Start lyric preview'}
         </button>
         <button
           type="button"
           onClick={reset}
           className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-blue-500 hover:text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
-          Reset
+          <Icon name="retry" />Restart preview
         </button>
         {onTimingOffsetChange && (
-          <div className="flex min-w-64 flex-1 flex-wrap items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+          <div className="timing-controls">
             <label htmlFor="timing-offset" className="text-sm text-slate-300">
               Timing offset: <span className="font-mono text-blue-200">{timingOffset >= 0 ? '+' : ''}{timingOffset.toFixed(2)}s</span>
             </label>
@@ -213,19 +229,30 @@ export function SyncedLyrics({
               onChange={(event) => onTimingOffsetChange(clampTimingOffset(Number(event.target.value)))}
               className="min-w-40 flex-1 accent-blue-500"
             />
+            <label htmlFor="timing-offset-number">Offset (seconds)
+              <input id="timing-offset-number" type="number" min={MIN_TIMING_OFFSET} max={MAX_TIMING_OFFSET} step={TIMING_OFFSET_STEP} value={offsetDraft}
+                aria-invalid={!offsetValid} aria-describedby="offset-help"
+                onChange={(event) => {
+                  const value = event.target.value
+                  setOffsetDraft(value)
+                  if (isValidOffsetEntry(value)) onTimingOffsetChange(Number(value))
+                }}
+                onBlur={() => { if (!offsetValid) setOffsetDraft(timingOffset.toFixed(2)) }} />
+            </label>
             <button
               type="button"
-              onClick={() => onTimingOffsetChange(0)}
+              onClick={() => { setOffsetDraft('0.00'); onTimingOffsetChange(0) }}
               className="text-xs font-semibold text-blue-300 hover:text-blue-200"
             >
               Reset offset
             </button>
+            <p id="offset-help" className="helper">Positive offsets delay lyrics; negative offsets show them earlier. Use −5 to +5 seconds in steps of 0.05. Invalid entries leave timing unchanged until corrected; leaving the field restores the applied value.</p>
           </div>
         )}
         {onRomanize && (
-          <>
+          <div className="reading-controls">
             {onRomanizationProviderChange && (
-              <label className="flex items-center gap-2 text-sm text-slate-300">
+              <label className="reading-language">
                 <span>Reading language</span>
                 <select
                   aria-label="Reading language"
@@ -234,9 +261,10 @@ export function SyncedLyrics({
                   className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
                 >
                   {romanizationOptions.map((option) => (
-                    <option key={option.id} value={option.id}>{option.displayName}</option>
+                    <option key={option.id} value={option.id}>{languageProviderLabel(option.id, option.displayName)}</option>
                   ))}
                 </select>
+                <span className="helper engine-details">Engine: {romanizationOptions.find((option) => option.id === romanizationProviderId)?.displayName} · {romanizationOptions.find((option) => option.id === romanizationProviderId)?.version ?? 'Version unspecified'}</span>
               </label>
             )}
             <button
@@ -247,7 +275,7 @@ export function SyncedLyrics({
             >
               {isRomanizing ? 'Preparing reading…' : 'Romanize selected language'}
             </button>
-          </>
+          </div>
         )}
       </div>
       {romanizationError && (

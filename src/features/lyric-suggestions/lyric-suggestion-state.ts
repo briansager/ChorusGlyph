@@ -5,6 +5,7 @@ export type LyricSuggestionState = {
   candidates: LyricCandidate[]
   selectedCandidateId?: string
   searchFields?: LyricCandidateSearchFields
+  preparedSearch?: LyricCandidateSearchFields & { candidateId: string }
   error?: string
 }
 
@@ -21,7 +22,7 @@ export type LyricSuggestionAction =
 
 export function lyricSuggestionReducer(state: LyricSuggestionState, action: LyricSuggestionAction): LyricSuggestionState {
   switch (action.type) {
-    case 'suggest': return { status: action.candidates.length ? 'suggested' : 'none', candidates: action.candidates }
+    case 'suggest': return { status: action.candidates.length ? 'suggested' : 'none', candidates: action.candidates, preparedSearch: state.preparedSearch }
     case 'select': return {
       ...state,
       status: 'selected',
@@ -35,12 +36,12 @@ export function lyricSuggestionReducer(state: LyricSuggestionState, action: Lyri
       searchFields: action.fields,
       candidates: state.candidates.map((candidate) => candidate.id === action.candidateId ? { ...candidate, ...action.fields, status: 'selected' } : candidate),
     }
-    case 'dismiss': return { status: 'dismissed', candidates: [] }
+    case 'dismiss': return { status: 'dismissed', candidates: [], preparedSearch: state.preparedSearch }
     case 'request-import-search': {
       const candidate = state.candidates.find((item) => item.id === action.candidateId)
-      return candidate ? { ...state, status: 'import-search-requested', selectedCandidateId: candidate.id, searchFields: { title: candidate.title, artist: candidate.artist } } : state
+      return candidate ? { ...state, status: 'import-search-requested', selectedCandidateId: candidate.id, searchFields: { title: candidate.title, artist: candidate.artist }, preparedSearch: { candidateId: candidate.id, title: candidate.title, artist: candidate.artist } } : state
     }
-    case 'cancel-import-search': return { ...state, status: state.selectedCandidateId ? 'selected' : 'none', searchFields: undefined }
+    case 'cancel-import-search': return { ...state, status: state.selectedCandidateId ? 'selected' : 'none', searchFields: undefined, preparedSearch: undefined }
     case 'error': return { ...state, status: 'error', error: action.message }
   }
 }

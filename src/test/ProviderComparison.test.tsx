@@ -54,7 +54,7 @@ describe('ProviderComparison', () => {
     expect(screen.getByLabelText('Detected language')).toHaveTextContent('Japanese detected')
     expect(screen.getByText('Kuroshiro + Kuromoji')).toBeInTheDocument()
     expect(screen.getByText('japanese-kuroshiro · vtest-1.0.0')).toBeInTheDocument()
-    expect(screen.getAllByText('Supported')).toHaveLength(1)
+    expect(screen.getAllByText('Ready to compare')).toHaveLength(1)
     expect(screen.getByText('Korean Romanization')).toBeInTheDocument()
   })
 
@@ -77,9 +77,9 @@ describe('ProviderComparison', () => {
     render(<ProviderComparison providers={providers} cache={new MemoryCache()} />)
     fireEvent.click(screen.getByRole('button', { name: 'Chinese' }))
 
-    expect(screen.getByLabelText('Detected language')).toHaveTextContent('Chinese detected')
-    expect(screen.getByText('Pinyin Pro').parentElement?.parentElement).toHaveTextContent('Supported')
-    expect(screen.getByText('Kuroshiro + Kuromoji').parentElement?.parentElement).toHaveTextContent('Not supported')
+    expect(screen.getByLabelText('Detected language')).toHaveTextContent('Chinese selected · Han-only text')
+    expect(screen.getByText('Pinyin Pro').parentElement?.parentElement).toHaveTextContent('Ready to compare')
+    expect(screen.getByText('Kuroshiro + Kuromoji').closest('article')).toHaveTextContent('Not supported')
   })
 
   it('requires an accessible manual choice for Kanji-only text', () => {
@@ -95,7 +95,7 @@ describe('ProviderComparison', () => {
     expect(screen.getByRole('radio', { name: 'Choose Japanese' })).not.toBeChecked()
     expect(screen.getByRole('radio', { name: 'Choose Chinese' })).not.toBeChecked()
     expect(screen.getByRole('button', { name: 'Compare providers' })).toBeDisabled()
-    expect(screen.getAllByText('Not supported')).toHaveLength(2)
+    expect(screen.getAllByText(/· Not supported/)).toHaveLength(2)
 
     fireEvent.click(screen.getByRole('radio', { name: 'Choose Japanese' }))
     expect(screen.getByRole('radio', { name: 'Choose Japanese' })).toBeChecked()
@@ -114,7 +114,7 @@ describe('ProviderComparison', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Chinese' }))
     expect(screen.queryByText('japanese result')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Detected language')).toHaveTextContent('Chinese detected')
+    expect(screen.getByLabelText('Detected language')).toHaveTextContent('Chinese selected · Han-only text')
     fireEvent.click(screen.getByRole('button', { name: 'Japanese' }))
     expect(screen.getByLabelText('Detected language')).toHaveTextContent('Japanese detected')
     expect(screen.queryByText('chinese result')).not.toBeInTheDocument()
@@ -138,9 +138,9 @@ describe('ProviderComparison', () => {
     }
 
     render(<ProviderComparison providers={[unsupported]} cache={new MemoryCache()} />)
-    expect(screen.getByText('Not supported')).toBeInTheDocument()
+    expect(screen.getByText(/· Not supported/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
-    await waitFor(() => expect(screen.getByText('Not supported')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/· Not supported/)).toBeInTheDocument())
     expect(romanize).not.toHaveBeenCalled()
   })
 
@@ -200,7 +200,7 @@ describe('ProviderComparison', () => {
 
     render(<ProviderComparison providers={[pending]} cache={new MemoryCache()} />)
     fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
-    expect(screen.getByText('Loading')).toBeInTheDocument()
+    expect(screen.getByText('Generating reading…')).toBeInTheDocument()
 
     await waitFor(() => expect(resolveRomanization).toBeDefined())
     resolveRomanization?.({
@@ -237,7 +237,7 @@ describe('ProviderComparison', () => {
     expect(screen.getByDisplayValue('青い朝が来る')).toBeInTheDocument()
     expect(screen.getByLabelText('Detected language')).toHaveTextContent('Japanese detected')
     expect(screen.queryByText('temporary reading')).not.toBeInTheDocument()
-    expect(screen.getByText('Supported')).toBeInTheDocument()
+    expect(screen.getByText('Ready to compare')).toBeInTheDocument()
   })
 
   it('does not let a reset during loading repopulate the comparison', async () => {
@@ -264,7 +264,7 @@ describe('ProviderComparison', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear comparison' }))
     resolveRomanization?.()
 
-    await waitFor(() => expect(screen.getByText('Supported')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Ready to compare')).toBeInTheDocument())
     expect(screen.queryByText('stale reading')).not.toBeInTheDocument()
   })
 
@@ -356,7 +356,7 @@ describe('ProviderComparison', () => {
 
     await waitFor(() => expect(screen.getByText('new reading')).toBeInTheDocument())
     expect(screen.queryByText('old reading')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Detected language')).toHaveTextContent('Chinese detected')
+    expect(screen.getByLabelText('Detected language')).toHaveTextContent('Chinese selected · Han-only text')
   })
 
   it('does not call an unsupported Azure provider for non-Thai input', async () => {
@@ -370,7 +370,18 @@ describe('ProviderComparison', () => {
     render(<ProviderComparison providers={[azure]} cache={new MemoryCache()} />)
     fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
 
-    await waitFor(() => expect(screen.getByText('Not supported')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/· Not supported/)).toBeInTheDocument())
     expect(fetchFn).not.toHaveBeenCalled()
   })
+  it('explains an empty successful output and keeps unavailable providers in compact rows', async () => {
+    const available = provider('japanese-kuroshiro', 'Japanese fixture', '青い朝が来る', '')
+    const unavailable = provider('korean-local', 'Korean fixture', '푸른 아침이 와요', 'unrequested')
+    render(<ProviderComparison providers={[unavailable, available]} cache={new MemoryCache()} />)
+    expect(screen.getByRole('heading', { name: 'Unavailable for this text' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Korean fixture' }).closest('article')).toHaveClass('provider-unavailable')
+    fireEvent.click(screen.getByRole('button', { name: 'Compare providers' }))
+    await screen.findByText('No reading returned')
+    expect(screen.getByText('Completed without a reading')).toBeInTheDocument()
+  })
+
 })

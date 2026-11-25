@@ -1,25 +1,27 @@
+import { Icon } from '../../shared/ui/Icon'
 import { useEffect, useState } from 'react'
-import type { CompanionNowPlayingResponse, CompanionStatus } from '../../domain/now-playing/windows-companion-types'
+import type { CompanionStatus } from '../../domain/now-playing/windows-companion-types'
 import { WindowsCompanionSource } from '../../domain/now-playing/windows-companion-source'
 
 type Props = {
   source: WindowsCompanionSource
   onStatusChange?: (status: CompanionStatus) => void
+  onUseDemoNowPlayingData?: () => CompanionStatus
 }
 
 const statusLabels: Record<CompanionStatus['status'], string> = {
-  disabled: 'Companion disabled',
-  connecting: 'Connecting',
-  'connected-playing': 'Connected — playing',
-  'connected-paused': 'Connected — paused',
-  'no-media': 'Connected — no current media',
-  offline: 'Companion offline',
-  'invalid-token': 'Invalid token',
-  'media-access-unavailable': 'Media access unavailable',
-  malformed: 'Malformed companion response',
+  disabled: 'Not connected',
+  connecting: 'Connecting…',
+  'connected-playing': 'Connected',
+  'connected-paused': 'Connected',
+  'no-media': 'Connected',
+  offline: 'Not connected',
+  'invalid-token': 'Connection failed',
+  'media-access-unavailable': 'Connection failed',
+  malformed: 'Connection failed',
 }
 
-export function WindowsCompanionPanel({ source, onStatusChange }: Props) {
+export function WindowsCompanionPanel({ source, onStatusChange, onUseDemoNowPlayingData }: Props) {
   const [mode, setMode] = useState<'manual' | 'companion'>('manual')
   const [token, setToken] = useState(() => source.getStoredToken() ?? '')
   const [status, setStatus] = useState<CompanionStatus>(source.getStatus())
@@ -37,18 +39,33 @@ export function WindowsCompanionPanel({ source, onStatusChange }: Props) {
 
   return (
     <section className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4" aria-labelledby="companion-heading">
-      <h2 id="companion-heading" className="text-sm font-semibold text-blue-200">Song source</h2>
-      <div className="mt-3 flex flex-wrap gap-4" role="radiogroup" aria-label="Song source mode">
+      <h2 id="companion-heading" className="section-heading"><Icon name="companion" />Song metadata source</h2>
+      <p id="metadata-help" className="helper">Choose how song details are provided. This does not change your loaded lyrics.</p>
+      <fieldset className="metadata-modes" aria-describedby="metadata-help"><legend>Song metadata mode</legend>
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input type="radio" name="song-source" value="manual" checked={!companionSelected} onChange={() => { source.disconnect(); setMode('manual') }} />
-          Manual input
+          Manual
         </label>
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input type="radio" name="song-source" value="companion" checked={companionSelected} onChange={() => setMode('companion')} />
-          Windows companion
+          Windows companion · Optional
         </label>
-      </div>
+      </fieldset>
+      <p className="helper" role="status">Connection: {statusLabels[status.status]}.</p>
+      {import.meta.env.DEV && onUseDemoNowPlayingData && (
+        <button
+          type="button"
+          onClick={() => {
+            const nextStatus = onUseDemoNowPlayingData()
+            onStatusChange?.(nextStatus)
+          }}
+          className="mt-4 rounded-lg border border-dashed border-slate-600 px-3 py-2 text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-300"
+        >
+          Use demo now-playing data
+        </button>
+      )}
 
+      {import.meta.env.DEV && onUseDemoNowPlayingData && <p className="helper">Demo metadata simulates companion input. It does not establish a live connection.</p>}
       {companionSelected && (
         <div className="mt-4 space-y-3">
           <label className="block text-sm text-slate-300" htmlFor="companion-token">
@@ -69,8 +86,8 @@ export function WindowsCompanionPanel({ source, onStatusChange }: Props) {
             <button type="button" onClick={() => source.disconnect()} className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-300">Disconnect</button>
             <button type="button" onClick={() => { source.clearStoredToken(); setToken(''); source.disconnect(true) }} className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-300">Clear saved token</button>
           </div>
-          <p className="text-sm text-slate-300" role="status" aria-live="polite">
-            Status: <span className="font-medium text-blue-200">{statusLabels[status.status]}</span>. {status.message}
+          <p className="text-sm text-slate-300">
+            {status.message}
           </p>
           {media?.available && (
             <div className="rounded-lg border border-blue-900/70 bg-blue-950/30 p-3 text-sm text-slate-300">

@@ -1,3 +1,4 @@
+import { TimedGlyph } from '../shared/ui/TimedGlyph'
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { LyricsDocument } from '../domain/lyrics/lyrics-types'
 import { loadTimingOffset, saveTimingOffset } from '../domain/now-playing/timing-offset'
@@ -11,6 +12,7 @@ import { ProviderComparison } from '../features/provider-comparison/ProviderComp
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
 import { WindowsCompanionPanel } from '../features/now-playing/WindowsCompanionPanel'
 import { WindowsCompanionSource } from '../domain/now-playing/windows-companion-source'
+import { getDemoNowPlayingStatus } from '../domain/now-playing/mock-now-playing-fixtures'
 import type { CompanionStatus } from '../domain/now-playing/windows-companion-types'
 import { createCandidateFromCompanionMedia } from '../domain/lyrics-candidates/companion-candidate'
 import { LyricSuggestions } from '../features/lyric-suggestions/LyricSuggestions'
@@ -28,7 +30,7 @@ const romanizerRegistry = createRomanizerRegistry({
 })
 const romanizationCache = new IndexedDbRomanizationCache()
 const readingOverrideStore = new IndexedDbReadingOverrideStore()
-const romanizationOptions = romanizerRegistry.manualProviders.map(({ id, displayName }) => ({ id, displayName }))
+const romanizationOptions = romanizerRegistry.manualProviders.map(({ id, displayName, version }) => ({ id, displayName, version }))
 const windowsCompanionSource = new WindowsCompanionSource()
 
 export function App() {
@@ -140,17 +142,17 @@ export function App() {
           const now = Date.now()
           try {
             await romanizationCache.set(cacheKey, {
-              cacheKey,
-              sourceId: lyricsDocument.sourceId,
-              title: lyricsDocument.title,
-              artist: lyricsDocument.artist,
-              duration: lyricsDocument.duration,
-              providerId: romanizer.id,
-              providerVersion,
-              originalText: line.text,
-              romanizedText: result.romanizedText,
-              createdAt: now,
-              updatedAt: now,
+        cacheKey,
+        sourceId: lyricsDocument.sourceId,
+        title: lyricsDocument.title,
+        artist: lyricsDocument.artist,
+        duration: lyricsDocument.duration,
+        providerId: romanizer.id,
+        providerVersion,
+        originalText: line.text,
+        romanizedText: result.romanizedText,
+        createdAt: now,
+        updatedAt: now,
             })
           } catch {
             // Local storage is an optimization; conversion remains usable without it.
@@ -213,91 +215,70 @@ export function App() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-8 sm:py-10">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl flex-col overflow-hidden rounded-3xl border border-blue-900/60 bg-slate-900 shadow-2xl shadow-blue-950/30 sm:min-h-[calc(100vh-5rem)]">
-        <header className="flex items-center justify-between border-b border-slate-800 px-6 py-5 sm:px-10">
-          <p className="text-lg font-semibold tracking-tight text-blue-300">ChorusGlyph</p>
-          <span className="rounded-full border border-blue-800/70 bg-blue-950/50 px-3 py-1 text-xs font-medium text-blue-200">
-            Milestone 6B
-          </span>
-        </header>
-
-        <section className="flex flex-1 flex-col justify-center px-6 py-16 sm:px-16 lg:px-24">
-          <div className="max-w-3xl">
-            <p className="mb-5 text-sm font-medium uppercase tracking-[0.2em] text-blue-400">
-              Sing together, understand every line
-            </p>
-            <h1 className="text-4xl font-bold tracking-tight text-white sm:text-6xl">
-              A multilingual sing-along app.
-            </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
-              ChorusGlyph is a privacy-conscious app for exploring songs with readable,
-              editable romanized readings across languages.
-            </p>
-            <div className="mt-10 space-y-5">
-              <LyricsSourcePanel
-                searchPrefill={suggestionState.searchFields}
-                candidateSearchActive={suggestionState.status === 'import-search-requested'}
-                onCandidateSearchCancel={() => dispatchSuggestion({ type: 'cancel-import-search' })}
-                onLoaded={(document) => {
-                  setLyricsDocument(document)
-                  setRomanizedLines({})
-                  setProviderRomanizedLines({})
-                  setEditedLines({})
-                  setCachedLines({})
-                  setRomanizationError(undefined)
-                  void restoreReadingOverrides(document, romanizationProviderId)
-                }}
-              />
-              <WindowsCompanionPanel
-                source={windowsCompanionSource}
-                onStatusChange={handleCompanionStatus}
-              />
-              <LyricSuggestions
-                state={suggestionState}
-                companionStatus={companionStatus}
-                onSelect={(candidateId) => dispatchSuggestion({ type: 'select', candidateId })}
-                onEdit={(candidateId, fields) => dispatchSuggestion({ type: 'edit', candidateId, fields })}
-                onDismiss={() => dispatchSuggestion({ type: 'dismiss' })}
-                onImportSearch={(candidateId) => dispatchSuggestion({ type: 'request-import-search', candidateId })}
-              />
-              <p className="text-sm text-slate-400">
-                Loaded source: <span className="font-medium text-blue-200">{lyricsDocument.sourceId}</span>
-                {lyricsDocument.title && <> · {lyricsDocument.title}</>}
-                {lyricsDocument.artist && <> by {lyricsDocument.artist}</>}
-              </p>
-              <SyncedLyrics
-                lines={lyricsDocument.lines}
-                romanizedLines={romanizedLines}
-                editedLines={editedLines}
-                cachedLines={cachedLines}
-                isRomanizing={isRomanizing}
-                romanizationError={romanizationError}
-                onRomanize={romanizeSelectedLanguage}
-                romanizationProviderId={romanizationProviderId}
-                romanizationOptions={romanizationOptions}
-                onRomanizationProviderChange={(providerId) => {
-                  setRomanizationProviderId(providerId)
-                  setRomanizedLines({})
-                  setProviderRomanizedLines({})
-                  setEditedLines({})
-                  setCachedLines({})
-                  setRomanizationError(undefined)
-                  void restoreReadingOverrides(lyricsDocument, providerId)
-                }}
-                onReadingOverrideChange={updateReadingOverride}
-                timingOffset={timingOffset}
-                onTimingOffsetChange={updateTimingOffset}
-              />
-              <ProviderComparison providers={romanizerRegistry.providers} cache={romanizationCache} />
-            </div>
-          </div>
-        </section>
-
-        <footer className="border-t border-slate-800 px-6 py-5 text-sm text-slate-500 sm:px-10">
-          Built as an independent portfolio project by Brian Sager.
-        </footer>
+    <main className="workspace-shell">
+      <header className="app-header">
+        <a className="brand" href="#workspace"><TimedGlyph /><span>ChorusGlyph</span></a>
+        <nav aria-label="Page sections"><a href="#workspace">Workspace</a><a href="#comparison">Compare readings</a></nav>
+      </header>
+      <section className="introduction" id="workspace">
+        <h1>Lyric workspace</h1>
+        <p>Load timed lyrics, adjust their timing, and explore readings across languages.</p>
+      </section>
+      <div className="workspace-sections">
+        <WindowsCompanionPanel
+          source={windowsCompanionSource}
+          onStatusChange={handleCompanionStatus}
+          onUseDemoNowPlayingData={import.meta.env.DEV ? getDemoNowPlayingStatus : undefined}
+        />
+        {(suggestionState.candidates.length > 0 || suggestionState.status === 'dismissed' || suggestionState.status === 'error' || companionStatus.status !== 'disabled') && <LyricSuggestions
+          state={suggestionState}
+          companionStatus={companionStatus}
+          onSelect={(candidateId) => dispatchSuggestion({ type: 'select', candidateId })}
+          onEdit={(candidateId, fields) => dispatchSuggestion({ type: 'edit', candidateId, fields })}
+          onDismiss={() => dispatchSuggestion({ type: 'dismiss' })}
+          onImportSearch={(candidateId) => dispatchSuggestion({ type: 'request-import-search', candidateId })}
+        />}
+        <LyricsSourcePanel
+          searchPrefill={suggestionState.preparedSearch}
+          candidateSearchActive={Boolean(suggestionState.preparedSearch)}
+          onCandidateSearchCancel={() => dispatchSuggestion({ type: 'cancel-import-search' })}
+          onLoaded={(document) => {
+            setLyricsDocument(document)
+            setRomanizedLines({})
+            setProviderRomanizedLines({})
+            setEditedLines({})
+            setCachedLines({})
+            setRomanizationError(undefined)
+            void restoreReadingOverrides(document, romanizationProviderId)
+          }}
+        />
+        <SyncedLyrics
+          document={lyricsDocument}
+          lines={lyricsDocument.lines}
+          romanizedLines={romanizedLines}
+          editedLines={editedLines}
+          cachedLines={cachedLines}
+          isRomanizing={isRomanizing}
+          romanizationError={romanizationError}
+          onRomanize={romanizeSelectedLanguage}
+          romanizationProviderId={romanizationProviderId}
+          romanizationOptions={romanizationOptions}
+          onRomanizationProviderChange={(providerId) => {
+            setRomanizationProviderId(providerId)
+            setRomanizedLines({})
+            setProviderRomanizedLines({})
+            setEditedLines({})
+            setCachedLines({})
+            setRomanizationError(undefined)
+            void restoreReadingOverrides(lyricsDocument, providerId)
+          }}
+          onReadingOverrideChange={updateReadingOverride}
+          timingOffset={timingOffset}
+          onTimingOffsetChange={updateTimingOffset}
+        />
+        <ProviderComparison providers={romanizerRegistry.providers} cache={romanizationCache} />
       </div>
+      <footer className="app-footer">Built as an independent portfolio project by Brian Sager.</footer>
     </main>
   )
 }

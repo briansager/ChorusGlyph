@@ -79,4 +79,23 @@ describe('lyric candidate foundation', () => {
     const result = createCandidateFromCompanionMedia(playingMedia)
     expect(result.candidate?.sourceName).toBe('Windows companion')
   })
+  it('retains an explicit preparation snapshot across arrivals, selection, edits, and dismissal', () => {
+    const first = candidate('first', 'Prepared title', 'Prepared artist')
+    const second = candidate('second', 'New arrival', 'New artist')
+    let state = lyricSuggestionReducer(initialLyricSuggestionState, { type: 'suggest', candidates: [first] })
+    state = lyricSuggestionReducer(state, { type: 'request-import-search', candidateId: first.id })
+    const snapshot = state.preparedSearch
+    state = lyricSuggestionReducer(state, { type: 'suggest', candidates: [second] })
+    state = lyricSuggestionReducer(state, { type: 'select', candidateId: second.id })
+    state = lyricSuggestionReducer(state, { type: 'edit', candidateId: second.id, fields: { title: 'Edited arrival' } })
+    expect(state.preparedSearch).toBe(snapshot)
+    expect(snapshot).toEqual({ candidateId: first.id, title: first.title, artist: first.artist })
+    const superseded = lyricSuggestionReducer(state, { type: 'request-import-search', candidateId: second.id })
+    expect(superseded.preparedSearch).toMatchObject({ candidateId: second.id, title: 'Edited arrival' })
+    state = lyricSuggestionReducer(state, { type: 'dismiss' })
+    expect(state.preparedSearch).toBe(snapshot)
+    state = lyricSuggestionReducer(state, { type: 'cancel-import-search' })
+    expect(state.preparedSearch).toBeUndefined()
+  })
+
 })
