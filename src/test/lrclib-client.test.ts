@@ -51,6 +51,17 @@ describe('LrclibClient', () => {
     })
   })
 
+  it('omits the artist query when title-only lookup is requested', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(responseBody))
+    const client = new LrclibClient(fetchMock)
+
+    await client.getLyrics({ trackName: 'Track', duration: 10 })
+
+    const url = new URL(fetchMock.mock.calls[0][0].toString())
+    expect(url.searchParams.get('track_name')).toBe('Track')
+    expect(url.searchParams.has('artist_name')).toBe(false)
+  })
+
   it('rejects missing search input', async () => {
     const client = new LrclibClient(vi.fn<typeof fetch>())
 

@@ -237,6 +237,8 @@ export function App() {
             <div className="mt-10 space-y-5">
               <LyricsSourcePanel
                 searchPrefill={suggestionState.searchFields}
+                candidateSearchActive={suggestionState.status === 'import-search-requested'}
+                onCandidateSearchCancel={() => dispatchSuggestion({ type: 'cancel-import-search' })}
                 onLoaded={(document) => {
                   setLyricsDocument(document)
                   setRomanizedLines({})

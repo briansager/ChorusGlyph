@@ -29,12 +29,20 @@ describe('LrclibLyricsSource', () => {
 
   it.each([
     [{ artist: 'Artist', duration: 10 }, 'track title'],
-    [{ title: 'Title', duration: 10 }, 'artist'],
     [{ title: 'Title', artist: 'Artist', duration: 0 }, 'positive duration'],
   ])('rejects missing or invalid %s', async (request, message) => {
     const source = new LrclibLyricsSource({ getLyrics: vi.fn() })
 
     await expect(source.load(request)).rejects.toThrow(message)
+  })
+
+  it('allows a title-only lookup when artist metadata is missing', async () => {
+    const client = { getLyrics: vi.fn().mockResolvedValue(syncedResponse) }
+    const source = new LrclibLyricsSource(client)
+
+    await source.load({ title: 'Title', duration: 10 })
+
+    expect(client.getLyrics).toHaveBeenCalledWith({ trackName: 'Title', artistName: undefined, duration: 10 })
   })
 
   it('rejects plain lyrics when synchronized lyrics are unavailable', async () => {

@@ -17,7 +17,6 @@ export class LrclibLyricsSource implements LyricsSource {
     const artist = request.artist?.trim()
 
     if (!title) throw new Error('Enter a track title before searching LRCLIB.')
-    if (!artist) throw new Error('Enter an artist before searching LRCLIB.')
     if (!Number.isFinite(request.duration) || request.duration === undefined || request.duration <= 0) {
       throw new Error('Enter a positive duration in seconds before searching LRCLIB.')
     }

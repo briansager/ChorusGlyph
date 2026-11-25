@@ -13,6 +13,6 @@ export type LrclibResponse = {
 
 export type LrclibLookup = {
   trackName: string
-  artistName: string
+  artistName?: string
   duration: number
 }

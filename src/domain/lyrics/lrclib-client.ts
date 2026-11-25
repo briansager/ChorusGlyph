@@ -68,15 +68,15 @@ export class LrclibClient {
 
   async getLyrics(input: LrclibLookup): Promise<LrclibResponse> {
     const trackName = input.trackName.trim()
-    const artistName = input.artistName.trim()
+    const artistName = input.artistName?.trim() ?? ''
 
-    if (!trackName || !artistName || !Number.isFinite(input.duration) || input.duration <= 0) {
-      throw new LrclibError('missing-input', 'Track title, artist, and a positive duration are required.')
+    if (!trackName || !Number.isFinite(input.duration) || input.duration <= 0) {
+      throw new LrclibError('missing-input', 'Track title and a positive duration are required.')
     }
 
     const url = new URL(LRCLIB_ENDPOINT)
     url.searchParams.set('track_name', trackName)
-    url.searchParams.set('artist_name', artistName)
+    if (artistName) url.searchParams.set('artist_name', artistName)
     url.searchParams.set('duration', String(input.duration))
 
     let response: Response

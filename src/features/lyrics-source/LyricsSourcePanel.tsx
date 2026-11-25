@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LyricsDocument } from '../../domain/lyrics/lyrics-types'
+import type { LyricsSource } from '../../domain/lyrics/lyrics-source'
 import { LrcFileLyricsSource } from '../../domain/lyrics/lrc-file-source'
 import { LrclibError } from '../../domain/lyrics/lrclib-client'
 import { LrclibLyricsSource } from '../../domain/lyrics/lrclib-source'
@@ -8,13 +9,16 @@ import { PasteTextLyricsSource } from '../../domain/lyrics/paste-text-source'
 type LyricsSourcePanelProps = {
   onLoaded: (document: LyricsDocument) => void
   searchPrefill?: { title?: string; artist?: string }
+  candidateSearchActive?: boolean
+  onCandidateSearchCancel?: () => void
+  lrclibSource?: Pick<LyricsSource, 'load'>
 }
 
 const pasteSource = new PasteTextLyricsSource()
 const fileSource = new LrcFileLyricsSource()
 const lrclibSource = new LrclibLyricsSource()
 
-export function LyricsSourcePanel({ onLoaded, searchPrefill }: LyricsSourcePanelProps) {
+export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActive = false, onCandidateSearchCancel, lrclibSource: configuredLrclibSource }: LyricsSourcePanelProps) {
   const [pastedText, setPastedText] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | undefined>()
   const [error, setError] = useState<string>()
@@ -26,11 +30,14 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill }: LyricsSourcePanel
   const [isLoading, setIsLoading] = useState(false)
   const [isLrclibLoading, setIsLrclibLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const searchButtonRef = useRef<HTMLButtonElement>(null)
+  const searchRunRef = useRef(0)
 
   useEffect(() => {
     if (searchPrefill?.title !== undefined) setLrclibTitle(searchPrefill.title)
     if (searchPrefill?.artist !== undefined) setLrclibArtist(searchPrefill.artist)
-  }, [searchPrefill])
+    if (candidateSearchActive) searchButtonRef.current?.focus()
+  }, [candidateSearchActive, searchPrefill])
 
   const loadDocument = async (load: () => Promise<LyricsDocument>) => {
     setError(undefined)
@@ -49,26 +56,30 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill }: LyricsSourcePanel
   }
 
   const lookupLrclib = async () => {
+    if (isLrclibLoading) return
+    const searchRun = ++searchRunRef.current
     setLrclibError(undefined)
     setLrclibStatus(undefined)
     setIsLrclibLoading(true)
 
     try {
-      const document = await lrclibSource.load({
+      const document = await (configuredLrclibSource ?? lrclibSource).load({
         title: lrclibTitle,
         artist: lrclibArtist,
         duration: Number(lrclibDuration),
       })
+      if (searchRun !== searchRunRef.current) return
       onLoaded(document)
       setLrclibStatus(`Loaded ${document.title ?? 'track'} by ${document.artist ?? 'unknown artist'} from LRCLIB.`)
     } catch (caughtError) {
+      if (searchRun !== searchRunRef.current) return
       if (caughtError instanceof LrclibError) {
         setLrclibError(caughtError.message)
       } else {
         setLrclibError(caughtError instanceof Error ? caughtError.message : 'Unable to look up lyrics.')
       }
     } finally {
-      setIsLrclibLoading(false)
+      if (searchRun === searchRunRef.current) setIsLrclibLoading(false)
     }
   }
 
@@ -138,6 +149,7 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill }: LyricsSourcePanel
           <label className="text-sm text-slate-200">
             Track title
             <input
+              aria-label="LRCLIB track title"
               value={lrclibTitle}
               onChange={(event) => setLrclibTitle(event.target.value)}
               className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
@@ -146,6 +158,7 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill }: LyricsSourcePanel
           <label className="text-sm text-slate-200">
             Artist
             <input
+              aria-label="LRCLIB artist"
               value={lrclibArtist}
               onChange={(event) => setLrclibArtist(event.target.value)}
               className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
@@ -154,6 +167,7 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill }: LyricsSourcePanel
           <label className="text-sm text-slate-200">
             Duration (seconds)
             <input
+              aria-label="LRCLIB duration"
               type="number"
               min="1"
               step="0.1"
@@ -164,6 +178,7 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill }: LyricsSourcePanel
           </label>
         </div>
         <button
+          ref={searchButtonRef}
           type="button"
           onClick={lookupLrclib}
           disabled={isLoading || isLrclibLoading}
@@ -171,6 +186,24 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill }: LyricsSourcePanel
         >
           {isLrclibLoading ? 'Searching…' : 'Search LRCLIB'}
         </button>
+        {candidateSearchActive && (
+          <button
+            type="button"
+            onClick={() => {
+              searchRunRef.current += 1
+              setIsLrclibLoading(false)
+              setLrclibTitle('')
+              setLrclibArtist('')
+              setLrclibDuration('')
+              setLrclibError(undefined)
+              setLrclibStatus(undefined)
+              onCandidateSearchCancel?.()
+            }}
+            className="ml-2 mt-4 rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          >
+            Cancel candidate search
+          </button>
+        )}
         {lrclibStatus && <p className="mt-3 text-sm text-emerald-200" role="status">{lrclibStatus}</p>}
         {lrclibError && <p className="mt-3 text-sm text-red-200" role="alert">{lrclibError}</p>}
       </div>

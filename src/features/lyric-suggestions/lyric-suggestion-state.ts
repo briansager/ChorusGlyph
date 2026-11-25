@@ -16,6 +16,7 @@ export type LyricSuggestionAction =
   | { type: 'edit'; candidateId: string; fields: LyricCandidateSearchFields }
   | { type: 'dismiss' }
   | { type: 'request-import-search'; candidateId: string }
+  | { type: 'cancel-import-search' }
   | { type: 'error'; message: string }
 
 export function lyricSuggestionReducer(state: LyricSuggestionState, action: LyricSuggestionAction): LyricSuggestionState {
@@ -39,6 +40,7 @@ export function lyricSuggestionReducer(state: LyricSuggestionState, action: Lyri
       const candidate = state.candidates.find((item) => item.id === action.candidateId)
       return candidate ? { ...state, status: 'import-search-requested', selectedCandidateId: candidate.id, searchFields: { title: candidate.title, artist: candidate.artist } } : state
     }
+    case 'cancel-import-search': return { ...state, status: state.selectedCandidateId ? 'selected' : 'none', searchFields: undefined }
     case 'error': return { ...state, status: 'error', error: action.message }
   }
 }
