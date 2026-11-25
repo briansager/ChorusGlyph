@@ -15,19 +15,16 @@ describe('WindowsCompanionPanel', () => {
     expect(fetchFn).not.toHaveBeenCalled()
   })
 
-  it('requires an explicit connect action and allows explicit song-context use', async () => {
+  it('requires an explicit connect action and exposes metadata without replacing context', async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse(healthyResponse)).mockResolvedValueOnce(jsonResponse(playingMedia))
     const source = new WindowsCompanionSource({ fetchFn, intervalMs: 100000 })
-    const onUseSongContext = vi.fn()
-    render(<WindowsCompanionPanel source={source} onUseSongContext={onUseSongContext} />)
+    render(<WindowsCompanionPanel source={source} />)
     fireEvent.click(screen.getByRole('radio', { name: 'Windows companion' }))
     fireEvent.change(screen.getByLabelText('Companion token'), { target: { value: 'run-token' } })
     expect(fetchFn).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Connect companion' }))
     await screen.findByText(/Connected — playing/)
     expect(screen.getByText(/Example title/)).toBeInTheDocument()
-    expect(onUseSongContext).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Use detected song context' }))
-    expect(onUseSongContext).toHaveBeenCalledWith(playingMedia)
+    expect(screen.queryByRole('button', { name: 'Use detected song context' })).not.toBeInTheDocument()
   })
 })

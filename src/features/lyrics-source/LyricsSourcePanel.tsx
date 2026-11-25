@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { LyricsDocument } from '../../domain/lyrics/lyrics-types'
 import { LrcFileLyricsSource } from '../../domain/lyrics/lrc-file-source'
 import { LrclibError } from '../../domain/lyrics/lrclib-client'
@@ -7,13 +7,14 @@ import { PasteTextLyricsSource } from '../../domain/lyrics/paste-text-source'
 
 type LyricsSourcePanelProps = {
   onLoaded: (document: LyricsDocument) => void
+  searchPrefill?: { title?: string; artist?: string }
 }
 
 const pasteSource = new PasteTextLyricsSource()
 const fileSource = new LrcFileLyricsSource()
 const lrclibSource = new LrclibLyricsSource()
 
-export function LyricsSourcePanel({ onLoaded }: LyricsSourcePanelProps) {
+export function LyricsSourcePanel({ onLoaded, searchPrefill }: LyricsSourcePanelProps) {
   const [pastedText, setPastedText] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | undefined>()
   const [error, setError] = useState<string>()
@@ -25,6 +26,11 @@ export function LyricsSourcePanel({ onLoaded }: LyricsSourcePanelProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isLrclibLoading, setIsLrclibLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (searchPrefill?.title !== undefined) setLrclibTitle(searchPrefill.title)
+    if (searchPrefill?.artist !== undefined) setLrclibArtist(searchPrefill.artist)
+  }, [searchPrefill])
 
   const loadDocument = async (load: () => Promise<LyricsDocument>) => {
     setError(undefined)

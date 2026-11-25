@@ -4,7 +4,7 @@ import { WindowsCompanionSource } from '../../domain/now-playing/windows-compani
 
 type Props = {
   source: WindowsCompanionSource
-  onUseSongContext?: (media: CompanionNowPlayingResponse) => void
+  onStatusChange?: (status: CompanionStatus) => void
 }
 
 const statusLabels: Record<CompanionStatus['status'], string> = {
@@ -19,15 +19,18 @@ const statusLabels: Record<CompanionStatus['status'], string> = {
   malformed: 'Malformed companion response',
 }
 
-export function WindowsCompanionPanel({ source, onUseSongContext }: Props) {
+export function WindowsCompanionPanel({ source, onStatusChange }: Props) {
   const [mode, setMode] = useState<'manual' | 'companion'>('manual')
   const [token, setToken] = useState(() => source.getStoredToken() ?? '')
   const [status, setStatus] = useState<CompanionStatus>(source.getStatus())
 
   useEffect(() => {
-    const unsubscribe = source.subscribeStatus(setStatus)
+    const unsubscribe = source.subscribeStatus((nextStatus) => {
+      setStatus(nextStatus)
+      onStatusChange?.(nextStatus)
+    })
     return unsubscribe
-  }, [source])
+  }, [onStatusChange, source])
 
   const companionSelected = mode === 'companion'
   const media = status.media
@@ -74,7 +77,6 @@ export function WindowsCompanionPanel({ source, onUseSongContext }: Props) {
               <p>Detected: <span className="font-medium text-white">{media.title || 'Untitled media'}</span>{media.artist ? ` — ${media.artist}` : ''}</p>
               {media.album && <p className="mt-1 text-slate-400">Album: {media.album}</p>}
               {media.sourceApplication && <p className="mt-1 text-slate-400">Source: {media.sourceApplication}</p>}
-              <button type="button" onClick={() => onUseSongContext?.(media)} className="mt-3 rounded-lg border border-blue-700 px-3 py-2 text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-300">Use detected song context</button>
             </div>
           )}
         </div>

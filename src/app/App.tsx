@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { LyricsDocument } from '../domain/lyrics/lyrics-types'
 import { loadTimingOffset, saveTimingOffset } from '../domain/now-playing/timing-offset'
 import { IndexedDbRomanizationCache } from '../domain/romanization/indexeddb-romanization-cache'
@@ -11,6 +11,10 @@ import { ProviderComparison } from '../features/provider-comparison/ProviderComp
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
 import { WindowsCompanionPanel } from '../features/now-playing/WindowsCompanionPanel'
 import { WindowsCompanionSource } from '../domain/now-playing/windows-companion-source'
+import type { CompanionStatus } from '../domain/now-playing/windows-companion-types'
+import { createCandidateFromCompanionMedia } from '../domain/lyrics-candidates/companion-candidate'
+import { LyricSuggestions } from '../features/lyric-suggestions/LyricSuggestions'
+import { initialLyricSuggestionState, lyricSuggestionReducer } from '../features/lyric-suggestions/lyric-suggestion-state'
 import { sampleLyricsDocument } from '../features/synced-lyrics/lyric-fixtures'
 
 const romanizerRegistry = createRomanizerRegistry({
@@ -37,11 +41,30 @@ export function App() {
   const [romanizationError, setRomanizationError] = useState<string>()
   const [romanizationProviderId, setRomanizationProviderId] = useState('japanese-kuroshiro')
   const [timingOffset, setTimingOffset] = useState(loadTimingOffset)
+  const [companionStatus, setCompanionStatus] = useState<CompanionStatus>(() => windowsCompanionSource.getStatus())
+  const [suggestionState, dispatchSuggestion] = useReducer(lyricSuggestionReducer, initialLyricSuggestionState)
+  const lastCompanionIdentity = useRef<string | undefined>(undefined)
 
   const updateTimingOffset = (nextOffset: number) => {
     setTimingOffset(nextOffset)
     saveTimingOffset(nextOffset)
   }
+
+  const handleCompanionStatus = useCallback((status: CompanionStatus) => {
+    setCompanionStatus(status)
+    if (status.status === 'disabled' || status.status === 'no-media') {
+      lastCompanionIdentity.current = undefined
+      dispatchSuggestion({ type: 'suggest', candidates: [] })
+      return
+    }
+    if (!status.media) return
+    const result = createCandidateFromCompanionMedia(status.media)
+    if (result.identity === lastCompanionIdentity.current) return
+    if (!result.identity) return
+    lastCompanionIdentity.current = result.identity
+    if (result.candidate) dispatchSuggestion({ type: 'suggest', candidates: [result.candidate] })
+    else if (result.reason === 'missing-title') dispatchSuggestion({ type: 'error', message: 'Media was detected, but it did not include a usable title.' })
+  }, [])
 
   const restoreReadingOverrides = async (document: LyricsDocument, providerId: string) => {
     const restoredReadings: Record<string, string> = {}
@@ -213,6 +236,7 @@ export function App() {
             </p>
             <div className="mt-10 space-y-5">
               <LyricsSourcePanel
+                searchPrefill={suggestionState.searchFields}
                 onLoaded={(document) => {
                   setLyricsDocument(document)
                   setRomanizedLines({})
@@ -225,13 +249,15 @@ export function App() {
               />
               <WindowsCompanionPanel
                 source={windowsCompanionSource}
-                onUseSongContext={(media) => {
-                  setLyricsDocument((current) => ({
-                    ...current,
-                    title: media.title ?? current.title,
-                    artist: media.artist ?? current.artist,
-                  }))
-                }}
+                onStatusChange={handleCompanionStatus}
+              />
+              <LyricSuggestions
+                state={suggestionState}
+                companionStatus={companionStatus}
+                onSelect={(candidateId) => dispatchSuggestion({ type: 'select', candidateId })}
+                onEdit={(candidateId, fields) => dispatchSuggestion({ type: 'edit', candidateId, fields })}
+                onDismiss={() => dispatchSuggestion({ type: 'dismiss' })}
+                onImportSearch={(candidateId) => dispatchSuggestion({ type: 'request-import-search', candidateId })}
               />
               <p className="text-sm text-slate-400">
                 Loaded source: <span className="font-medium text-blue-200">{lyricsDocument.sourceId}</span>
