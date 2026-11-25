@@ -9,6 +9,8 @@ import { createRomanizerRegistry } from '../domain/romanization/romanizer-regist
 import { LyricsSourcePanel } from '../features/lyrics-source/LyricsSourcePanel'
 import { ProviderComparison } from '../features/provider-comparison/ProviderComparison'
 import { SyncedLyrics } from '../features/synced-lyrics/SyncedLyrics'
+import { WindowsCompanionPanel } from '../features/now-playing/WindowsCompanionPanel'
+import { WindowsCompanionSource } from '../domain/now-playing/windows-companion-source'
 import { sampleLyricsDocument } from '../features/synced-lyrics/lyric-fixtures'
 
 const romanizerRegistry = createRomanizerRegistry({
@@ -23,6 +25,7 @@ const romanizerRegistry = createRomanizerRegistry({
 const romanizationCache = new IndexedDbRomanizationCache()
 const readingOverrideStore = new IndexedDbReadingOverrideStore()
 const romanizationOptions = romanizerRegistry.manualProviders.map(({ id, displayName }) => ({ id, displayName }))
+const windowsCompanionSource = new WindowsCompanionSource()
 
 export function App() {
   const [lyricsDocument, setLyricsDocument] = useState<LyricsDocument>(sampleLyricsDocument)
@@ -218,6 +221,16 @@ export function App() {
                   setCachedLines({})
                   setRomanizationError(undefined)
                   void restoreReadingOverrides(document, romanizationProviderId)
+                }}
+              />
+              <WindowsCompanionPanel
+                source={windowsCompanionSource}
+                onUseSongContext={(media) => {
+                  setLyricsDocument((current) => ({
+                    ...current,
+                    title: media.title ?? current.title,
+                    artist: media.artist ?? current.artist,
+                  }))
                 }}
               />
               <p className="text-sm text-slate-400">
