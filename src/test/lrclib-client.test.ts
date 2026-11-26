@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   LRCLIB_CLIENT_HEADER,
   LRCLIB_ENDPOINT,
+  LRCLIB_SEARCH_ENDPOINT,
   LrclibClient,
   LrclibError,
 } from '../domain/lyrics/lrclib-client'
@@ -123,4 +124,60 @@ describe('LrclibClient', () => {
       LrclibError,
     )
   })
+  it('searches the stable multi-result endpoint with one explicit request and the existing client header', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse([responseBody, { ...responseBody, id: 43 }]))
+    const client = new LrclibClient(fetchMock)
+    expect(fetchMock).not.toHaveBeenCalled()
+    const results = await client.searchLyrics({ trackName: '  Demo track  ', artistName: ' Demo artist ' })
+    expect(results).toHaveLength(2)
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const [requestUrl, init] = fetchMock.mock.calls[0]
+    const url = new URL(requestUrl.toString())
+    expect(url.origin + url.pathname).toBe(LRCLIB_SEARCH_ENDPOINT)
+    expect(Object.fromEntries(url.searchParams)).toEqual({ track_name: 'Demo track', artist_name: 'Demo artist' })
+    expect(init?.headers).toEqual({ 'Lrclib-Client': LRCLIB_CLIENT_HEADER })
+  })
+
+  it('allows a title-only search and incomplete result metadata', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse([{ ...responseBody, artistName: null, albumName: null, duration: null }]))
+    const result = await new LrclibClient(fetchMock).searchLyrics({ trackName: 'Track' })
+    expect(result[0]).toMatchObject({ artistName: null, duration: null })
+    expect(new URL(fetchMock.mock.calls[0][0].toString()).searchParams.has('artist_name')).toBe(false)
+  })
+
+  it('blocks an empty title before making any search request', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+    await expect(new LrclibClient(fetchMock).searchLyrics({ trackName: ' ' })).rejects.toMatchObject({ code: 'missing-input' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([[], null, {}, [{ ...responseBody, duration: '120' }], [{ ...responseBody, language: 2 }]])('validates search response shape %s', async (body) => {
+    const client = new LrclibClient(vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(body)))
+    if (Array.isArray(body) && body.length === 0) await expect(client.searchLyrics({ trackName: 'Track' })).resolves.toEqual([])
+    else await expect(client.searchLyrics({ trackName: 'Track' })).rejects.toMatchObject({ code: 'invalid-response' })
+  })
+
+  it('returns no results for a search 404 and surfaces rate-limit recovery without automatic retries', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response('', { status: 404 }))
+      .mockResolvedValueOnce(new Response('', { status: 429, headers: { 'Retry-After': '30' } }))
+    const client = new LrclibClient(fetchMock)
+    await expect(client.searchLyrics({ trackName: 'Track' })).resolves.toEqual([])
+    await expect(client.searchLyrics({ trackName: 'Track' })).rejects.toMatchObject({ code: 'rate-limit', retryAfter: '30' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('invokes the default native fetch with the global receiver for lookup and search', async () => {
+    const fetchMock = vi.fn(function(this: unknown, input: RequestInfo | URL) {
+      expect(this).toBe(globalThis)
+      return Promise.resolve(jsonResponse(new URL(input.toString()).pathname.endsWith('/search') ? [responseBody] : responseBody))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const client = new LrclibClient()
+      await client.getLyrics({ trackName: 'Track', duration: 120 })
+      await client.searchLyrics({ trackName: 'Track' })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally { vi.unstubAllGlobals() }
+  })
+
 })

@@ -239,6 +239,7 @@ export function App() {
           onImportSearch={(candidateId) => dispatchSuggestion({ type: 'request-import-search', candidateId })}
         />}
         <LyricsSourcePanel
+          activeDocument={lyricsDocument}
           searchPrefill={suggestionState.preparedSearch}
           candidateSearchActive={Boolean(suggestionState.preparedSearch)}
           onCandidateSearchCancel={() => dispatchSuggestion({ type: 'cancel-import-search' })}

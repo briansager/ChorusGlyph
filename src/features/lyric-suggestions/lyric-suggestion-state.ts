@@ -1,3 +1,4 @@
+import type { LyricMatchReference } from '../../domain/lyrics/lrclib-types'
 import type { LyricCandidate, LyricCandidateSearchFields } from '../../domain/lyrics-candidates/lyric-candidate-types'
 
 export type LyricSuggestionState = {
@@ -5,7 +6,7 @@ export type LyricSuggestionState = {
   candidates: LyricCandidate[]
   selectedCandidateId?: string
   searchFields?: LyricCandidateSearchFields
-  preparedSearch?: LyricCandidateSearchFields & { candidateId: string }
+  preparedSearch?: LyricMatchReference & { candidateId: string }
   error?: string
 }
 
@@ -39,7 +40,7 @@ export function lyricSuggestionReducer(state: LyricSuggestionState, action: Lyri
     case 'dismiss': return { status: 'dismissed', candidates: [], preparedSearch: state.preparedSearch }
     case 'request-import-search': {
       const candidate = state.candidates.find((item) => item.id === action.candidateId)
-      return candidate ? { ...state, status: 'import-search-requested', selectedCandidateId: candidate.id, searchFields: { title: candidate.title, artist: candidate.artist }, preparedSearch: { candidateId: candidate.id, title: candidate.title, artist: candidate.artist } } : state
+      return candidate ? { ...state, status: 'import-search-requested', selectedCandidateId: candidate.id, searchFields: { title: candidate.title, artist: candidate.artist }, preparedSearch: { candidateId: candidate.id, title: candidate.title, artist: candidate.artist, ...(candidate.album ? { album: candidate.album } : {}), ...(candidate.duration ? { duration: candidate.duration } : {}), ...(candidate.language ? { language: candidate.language } : {}) } } : state
     }
     case 'cancel-import-search': return { ...state, status: state.selectedCandidateId ? 'selected' : 'none', searchFields: undefined, preparedSearch: undefined }
     case 'error': return { ...state, status: 'error', error: action.message }

@@ -32,6 +32,7 @@ export function createCandidateFromCompanionMedia(media: CompanionNowPlayingResp
       artist: artist.display || undefined,
       album: album.display || undefined,
       sourceName: 'Windows companion',
+      ...(typeof media.durationSeconds === 'number' && Number.isFinite(media.durationSeconds) && media.durationSeconds > 0 ? { duration: media.durationSeconds } : {}),
       sourceIdentifier: media.sourceApplication ?? undefined,
       matchScore: artist.display ? 1 : 0.65,
       matchingReasons: artist.display

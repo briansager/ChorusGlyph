@@ -7,6 +7,7 @@ export type LyricCandidate = {
   artist?: string
   album?: string
   language?: string
+  duration?: number
   sourceName: string
   sourceUrl?: string
   sourceIdentifier?: string

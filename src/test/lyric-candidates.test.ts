@@ -98,4 +98,16 @@ describe('lyric candidate foundation', () => {
     expect(state.preparedSearch).toBeUndefined()
   })
 
+  it('carries only existing companion duration metadata into an immutable prepared reference', () => {
+    const item = createCandidateFromCompanionMedia({ ...playingMedia, durationSeconds: 121 }).candidate!
+    item.language = 'ja'
+    let state = lyricSuggestionReducer(initialLyricSuggestionState, { type: 'suggest', candidates: [item] })
+    state = lyricSuggestionReducer(state, { type: 'request-import-search', candidateId: item.id })
+    expect(state.preparedSearch).toMatchObject({ title: item.title, artist: item.artist, duration: 121, album: item.album, language: 'ja' })
+    const reference = state.preparedSearch
+    state = lyricSuggestionReducer(state, { type: 'suggest', candidates: [] })
+    expect(state.preparedSearch).toBe(reference)
+    expect(createCandidateFromCompanionMedia({ ...playingMedia, durationSeconds: -1 }).candidate?.duration).toBeUndefined()
+  })
+
 })

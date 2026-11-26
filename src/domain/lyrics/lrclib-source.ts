@@ -1,5 +1,6 @@
 import { parseLrc } from './lrc-parser'
 import { LrclibClient } from './lrclib-client'
+import type { LrclibSearchResult } from './lrclib-types'
 import type { LyricsDocument } from './lyrics-types'
 import type { LyricsSource, LyricsSourceRequest } from './lyrics-source'
 
@@ -27,24 +28,25 @@ export class LrclibLyricsSource implements LyricsSource {
       duration: request.duration,
     })
 
-    if (!result.syncedLyrics?.trim()) {
-      if (result.plainLyrics?.trim()) {
-        throw new Error('LRCLIB returned untimed lyrics; untimed lyrics cannot yet be synchronized.')
-      }
-      throw new Error('LRCLIB did not return synchronized lyrics for this track.')
-    }
+    return createLrclibDocument(result)
+  }
+}
 
-    const lines = parseLrc(result.syncedLyrics)
-    if (!lines.length) {
-      throw new Error('LRCLIB returned synchronized lyrics that could not be parsed.')
-    }
-
-    return {
-      lines,
-      title: result.trackName,
-      artist: result.artistName,
-      duration: result.duration,
-      sourceId: this.id,
-    }
+/** Converts a reviewed record locally; never makes another request. */
+export function createLrclibDocument(result: LrclibSearchResult): LyricsDocument {
+  if (!result.syncedLyrics?.trim()) {
+    if (result.plainLyrics?.trim()) throw new Error('LRCLIB returned untimed lyrics; untimed lyrics cannot yet be synchronized.')
+    throw new Error('LRCLIB did not return synchronized lyrics for this track.')
+  }
+  const lines = parseLrc(result.syncedLyrics)
+  if (!lines.length) throw new Error('LRCLIB returned synchronized lyrics that could not be parsed.')
+  return {
+    lines,
+    title: result.trackName,
+    artist: result.artistName?.trim() || undefined,
+    ...(result.albumName?.trim() ? { album: result.albumName.trim() } : {}),
+    ...(result.language?.trim() ? { language: result.language.trim() } : {}),
+    duration: result.duration && result.duration > 0 ? result.duration : undefined,
+    sourceId: 'lrclib',
   }
 }

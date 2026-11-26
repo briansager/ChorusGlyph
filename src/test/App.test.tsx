@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { App } from '../app/App'
 
 describe('ChorusGlyph starter page', () => {
@@ -52,6 +52,34 @@ describe('ChorusGlyph starter page', () => {
     fireEvent.click(dismiss)
     expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Song suggestions' })).toHaveFocus()
+  })
+
+  it('keeps actual active lyrics separate from detected-song results through preview and confirmation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([{
+      id: 21, trackName: 'Chosen original result', artistName: 'Chosen artist', duration: 120,
+      instrumental: false, syncedLyrics: '[00:00.00]A newly confirmed original line',
+    }]), { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      render(<App />)
+      fireEvent.change(screen.getByLabelText('Timed LRC text'), { target: { value: '[00:00.00]My already loaded line' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Load pasted text' }))
+      await screen.findByText('My already loaded line')
+      const active = screen.getByRole('region', { name: 'Synchronized lyrics' })
+      fireEvent.click(screen.getByRole('button', { name: 'Use demo now-playing data' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Prepare lyric search' }))
+      expect(fetchMock).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: 'Search LRCLIB' }))
+      await screen.findByRole('article', { name: 'Lyric result: Chosen original result' })
+      expect(within(active).getByText('My already loaded line')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Select lyrics' }))
+      expect(within(active).getByText('My already loaded line')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm replacement' }))
+      expect(within(active).getByText('A newly confirmed original line')).toBeInTheDocument()
+      expect(within(active).getByText('Source: LRCLIB')).toBeInTheDocument()
+      expect(within(active).queryByText('My already loaded line')).not.toBeInTheDocument()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally { vi.unstubAllGlobals() }
   })
 
 })

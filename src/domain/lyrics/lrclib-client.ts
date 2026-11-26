@@ -1,6 +1,7 @@
-import type { LrclibLookup, LrclibResponse } from './lrclib-types'
+import type { LrclibLookup, LrclibResponse, LrclibSearch, LrclibSearchResult } from './lrclib-types'
 
 export const LRCLIB_ENDPOINT = 'https://lrclib.net/api/get'
+export const LRCLIB_SEARCH_ENDPOINT = 'https://lrclib.net/api/search'
 export const LRCLIB_CLIENT_HEADER = 'ChorusGlyph/0.1.0 (https://github.com/briansager/ChorusGlyph)'
 
 export type LrclibErrorCode =
@@ -59,10 +60,23 @@ function validateResponse(value: unknown): LrclibResponse {
   return value as LrclibResponse
 }
 
+function validateSearchResult(value: unknown): LrclibSearchResult {
+  if (!isRecord(value)) throw new LrclibError('invalid-response', 'LRCLIB returned an invalid search record.')
+  const { artistName, albumName, duration, language } = value
+  if ((artistName != null && typeof artistName !== 'string') ||
+      (albumName != null && typeof albumName !== 'string') ||
+      (duration != null && (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0)) ||
+      (language != null && typeof language !== 'string')) {
+    throw new LrclibError('invalid-response', 'LRCLIB returned invalid search metadata.')
+  }
+  validateResponse({ ...value, artistName: artistName ?? '', albumName: albumName ?? '', duration: duration ?? 0 })
+  return value as LrclibSearchResult
+}
+
 export class LrclibClient {
   private readonly fetchImpl: LrclibFetch
 
-  constructor(fetchImpl: LrclibFetch = fetch) {
+  constructor(fetchImpl: LrclibFetch = (input, init) => globalThis.fetch(input, init)) {
     this.fetchImpl = fetchImpl
   }
 
@@ -79,6 +93,27 @@ export class LrclibClient {
     if (artistName) url.searchParams.set('artist_name', artistName)
     url.searchParams.set('duration', String(input.duration))
 
+    return validateResponse(await this.request(url))
+  }
+
+  async searchLyrics(input: LrclibSearch): Promise<LrclibSearchResult[]> {
+    const title = input.trackName.trim()
+    if (!title) throw new LrclibError('missing-input', 'Enter a track title before searching LRCLIB.')
+    const url = new URL(LRCLIB_SEARCH_ENDPOINT)
+    url.searchParams.set('track_name', title)
+    if (input.artistName?.trim()) url.searchParams.set('artist_name', input.artistName.trim())
+    let body: unknown
+    try {
+      body = await this.request(url)
+    } catch (error) {
+      if (error instanceof LrclibError && error.code === 'not-found') return []
+      throw error
+    }
+    if (!Array.isArray(body)) throw new LrclibError('invalid-response', 'LRCLIB returned an invalid search response.')
+    return body.map(validateSearchResult)
+  }
+
+  private async request(url: URL): Promise<unknown> {
     let response: Response
     try {
       response = await this.fetchImpl(url, {
@@ -121,6 +156,6 @@ export class LrclibClient {
       throw new LrclibError('invalid-response', 'LRCLIB returned invalid JSON.')
     }
 
-    return validateResponse(body)
+    return body
   }
 }

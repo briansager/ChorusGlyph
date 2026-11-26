@@ -204,3 +204,21 @@ label > .icon { margin-right: var(--space-2); }
 .han-language-choice legend.status-warning { color: var(--status-warning); }
 
 .han-language-choice label:focus-within, #lyric-suggestions-heading:focus { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: none; }
+
+/* LRCLIB review remains separate from the active workspace. */
+.lyric-result-review { margin-top: var(--space-6); }
+.lyric-result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-4); align-items: start; }
+.lyric-result-card, .lyric-confirmation { background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); padding: var(--space-4); }
+.lyric-confirmation { margin-top: var(--space-4); border-inline-start: 3px solid var(--accent-link); }
+.lyric-confirmation h4 { margin-top: var(--space-4); }
+.result-match { margin-top: var(--space-4); color: var(--text-primary); font-size: 14px; font-weight: 600; }
+.result-reasons { padding-left: var(--space-4); margin-top: var(--space-2); color: var(--text-secondary); font-size: 14px; line-height: 20px; list-style: disc; }
+.result-reasons li + li { margin-top: var(--space-1); }
+.result-preview { margin-top: var(--space-3); }
+.result-preview summary { color: var(--accent-link); cursor: pointer; padding: var(--space-3) 0; min-height: 44px; font-size: 14px; }
+.result-preview pre { font-family: inherit; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 28px; padding: var(--space-3) 0; color: var(--text-primary); }
+.result-select { margin-top: var(--space-3); }
+.review-actions { margin-top: var(--space-4); border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); }
+.status-warning { color: var(--status-warning); font-size: 14px; line-height: 20px; margin-top: var(--space-2); }
+#lyric-confirm-heading:focus { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (max-width: 639px) { .lyric-result-grid { grid-template-columns: minmax(0, 1fr); } }

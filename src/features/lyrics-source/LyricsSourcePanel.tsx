@@ -1,25 +1,26 @@
 import { Icon } from '../../shared/ui/Icon'
 import { useEffect, useRef, useState } from 'react'
 import type { LyricsDocument } from '../../domain/lyrics/lyrics-types'
-import type { LyricsSource } from '../../domain/lyrics/lyrics-source'
+import type { LyricMatchReference } from '../../domain/lyrics/lrclib-types'
 import { LrcFileLyricsSource } from '../../domain/lyrics/lrc-file-source'
-import { LrclibError } from '../../domain/lyrics/lrclib-client'
-import { LrclibLyricsSource } from '../../domain/lyrics/lrclib-source'
+import { LrclibClient } from '../../domain/lyrics/lrclib-client'
 import { PasteTextLyricsSource } from '../../domain/lyrics/paste-text-source'
+import { LrclibResultReview } from './LrclibResultReview'
+import { reviewLyricResults, type LyricSearchReview } from './lrclib-result-review'
 
 type LyricsSourcePanelProps = {
   onLoaded: (document: LyricsDocument) => void
-  searchPrefill?: { title?: string; artist?: string }
+  activeDocument?: LyricsDocument
+  searchPrefill?: LyricMatchReference
   candidateSearchActive?: boolean
   onCandidateSearchCancel?: () => void
-  lrclibSource?: Pick<LyricsSource, 'load'>
+  lrclibClient?: Pick<LrclibClient, 'searchLyrics'>
 }
-
 const pasteSource = new PasteTextLyricsSource()
 const fileSource = new LrcFileLyricsSource()
-const lrclibSource = new LrclibLyricsSource()
+const defaultLrclibClient = new LrclibClient()
 
-export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActive = false, onCandidateSearchCancel, lrclibSource: configuredLrclibSource }: LyricsSourcePanelProps) {
+export function LyricsSourcePanel({ onLoaded, activeDocument, searchPrefill, candidateSearchActive = false, onCandidateSearchCancel, lrclibClient = defaultLrclibClient }: LyricsSourcePanelProps) {
   const [pastedText, setPastedText] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | undefined>()
   const [error, setError] = useState<string>()
@@ -30,34 +31,43 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActi
   const [lrclibStatus, setLrclibStatus] = useState<string>()
   const [isLoading, setIsLoading] = useState(false)
   const [isLrclibLoading, setIsLrclibLoading] = useState(false)
+  const [review, setReview] = useState<LyricSearchReview>()
+  const [selectedKey, setSelectedKey] = useState<string>()
+  const pasteInputRef = useRef<HTMLTextAreaElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const searchButtonRef = useRef<HTMLButtonElement>(null)
   const searchRunRef = useRef(0)
-
   const focusPreparedSearch = useRef(false)
-  useEffect(() => {
+  const invalidateReview = () => {
     searchRunRef.current += 1
     setIsLrclibLoading(false)
+    setReview(undefined)
+    setSelectedKey(undefined)
     setLrclibError(undefined)
     setLrclibStatus(undefined)
-    if (searchPrefill?.title !== undefined) setLrclibTitle(searchPrefill.title)
-    if (searchPrefill?.artist !== undefined) setLrclibArtist(searchPrefill.artist)
+  }
+  useEffect(() => {
+    invalidateReview()
+    if (searchPrefill) {
+      setLrclibTitle(searchPrefill.title ?? '')
+      setLrclibArtist(searchPrefill.artist ?? '')
+      setLrclibDuration(searchPrefill.duration && searchPrefill.duration > 0 ? String(searchPrefill.duration) : '')
+    }
     if (candidateSearchActive) focusPreparedSearch.current = true
   }, [candidateSearchActive, searchPrefill])
-
   useEffect(() => {
     if (focusPreparedSearch.current && !isLoading && !isLrclibLoading) {
       searchButtonRef.current?.focus()
       focusPreparedSearch.current = false
     }
   })
+  useEffect(() => () => { searchRunRef.current += 1 }, [])
 
   const loadDocument = async (load: () => Promise<LyricsDocument>) => {
-    searchRunRef.current += 1
-    setIsLrclibLoading(false)
+    invalidateReview()
     setError(undefined)
     setIsLoading(true)
-
     try {
       onLoaded(await load())
       setPastedText('')
@@ -65,39 +75,48 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActi
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Unable to load lyrics.')
-    } finally {
-      setIsLoading(false)
-    }
+    } finally { setIsLoading(false) }
   }
-
   const lookupLrclib = async () => {
-    if (isLrclibLoading) return
-    const searchRun = ++searchRunRef.current
-    setLrclibError(undefined)
-    setLrclibStatus(undefined)
+    if (isLoading || isLrclibLoading) return
+    invalidateReview()
+    const searchRun = searchRunRef.current
+    const duration = lrclibDuration.trim() ? Number(lrclibDuration) : undefined
+    if (!lrclibTitle.trim()) {
+      setLrclibError('Enter a track title before searching LRCLIB.')
+      return
+    }
+    if (duration !== undefined && (!Number.isFinite(duration) || duration <= 0)) {
+      setLrclibError('Enter a positive duration in seconds or leave it empty.')
+      return
+    }
+    const fromCandidate = Boolean(candidateSearchActive && searchPrefill)
+    const reference: LyricMatchReference = fromCandidate ? { ...searchPrefill, duration } : { title: lrclibTitle, artist: lrclibArtist, duration }
     setIsLrclibLoading(true)
-
     try {
-      const document = await (configuredLrclibSource ?? lrclibSource).load({
-        title: lrclibTitle,
-        artist: lrclibArtist,
-        duration: Number(lrclibDuration),
-      })
+      const records = await lrclibClient.searchLyrics({ trackName: lrclibTitle, artistName: lrclibArtist })
       if (searchRun !== searchRunRef.current) return
-      onLoaded(document)
-      setLrclibStatus(`Loaded ${document.title ?? 'track'} by ${document.artist ?? 'unknown artist'} from LRCLIB.`)
+      setReview(reviewLyricResults(records, reference, fromCandidate))
     } catch (caughtError) {
       if (searchRun !== searchRunRef.current) return
-      if (caughtError instanceof LrclibError) {
-        setLrclibError(caughtError.message)
-      } else {
-        setLrclibError(caughtError instanceof Error ? caughtError.message : 'Unable to look up lyrics.')
-      }
+      setLrclibError(caughtError instanceof Error ? caughtError.message : 'Unable to look up lyrics.')
     } finally {
       if (searchRun === searchRunRef.current) setIsLrclibLoading(false)
     }
   }
-
+  const confirmSelection = () => {
+    const chosen = review?.results.find((item) => item.key === selectedKey)
+    if (!chosen?.document || isLoading || isLrclibLoading) return
+    onLoaded(chosen.document)
+    invalidateReview()
+    setLrclibStatus('Loaded ' + (chosen.document.title || 'track') + ' by ' + (chosen.document.artist || 'unknown artist') + ' from LRCLIB.')
+    focusPreparedSearch.current = true
+  }
+  const cancelReview = () => {
+    invalidateReview()
+    setLrclibStatus('Search canceled. Active lyrics remain unchanged.')
+    focusPreparedSearch.current = true
+  }
   return (
     <section className="rounded-2xl border border-blue-800/60 bg-blue-950/30 p-5 sm:p-7" aria-label="Load local lyrics">
       <div>
@@ -114,6 +133,7 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActi
             <Icon name="manual" />Timed LRC text
           </label>
           <textarea
+            ref={pasteInputRef}
             id="lrc-text"
             aria-describedby="lrc-format local-load-error"
             value={pastedText}
@@ -162,17 +182,19 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActi
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-blue-400">External lookup</p>
         <h2 className="mt-2 text-xl font-semibold text-white">Find synchronized lyrics with LRCLIB</h2>
         <p className="mt-2 text-sm leading-6 text-blue-100/70">
-          Search LRCLIB sends the song details below from your browser to LRCLIB. A successful result loads synchronized lyrics into your workspace.
+          Search LRCLIB sends title and artist from your browser to LRCLIB only when you choose Search LRCLIB. Review results and confirm before replacing active lyrics.
         </p>
         {candidateSearchActive && <p role="status" className="prepared-notice">Search prepared from suggested song. Review the details, then search LRCLIB.</p>}
+        <p className="helper">Duration is optional and used only on this device to compare results. A prepared search compares the suggested title, artist, album and language, with your reviewed duration. Missing metadata is not guessed.</p>
         <div className="search-fields">
           <label className="text-sm text-slate-200">
             Track title (required)
             <input
+              ref={titleInputRef}
               aria-label="LRCLIB track title"
               aria-describedby="lrclib-error"
               value={lrclibTitle}
-              onChange={(event) => setLrclibTitle(event.target.value)}
+              onChange={(event) => { invalidateReview(); setLrclibTitle(event.target.value) }}
               className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
             />
           </label>
@@ -182,12 +204,12 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActi
               aria-label="LRCLIB artist"
               aria-describedby="lrclib-error"
               value={lrclibArtist}
-              onChange={(event) => setLrclibArtist(event.target.value)}
+              onChange={(event) => { invalidateReview(); setLrclibArtist(event.target.value) }}
               className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
             />
           </label>
           <label className="text-sm text-slate-200">
-            Duration (seconds, required)
+            Duration (seconds, optional)
             <input
               aria-label="LRCLIB duration"
               aria-describedby="lrclib-error"
@@ -195,7 +217,7 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActi
               min="1"
               step="0.1"
               value={lrclibDuration}
-              onChange={(event) => setLrclibDuration(event.target.value)}
+              onChange={(event) => { invalidateReview(); setLrclibDuration(event.target.value) }}
               className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
             />
           </label>
@@ -214,13 +236,10 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActi
           <button
             type="button"
             onClick={() => {
-              searchRunRef.current += 1
-              setIsLrclibLoading(false)
+              invalidateReview()
               setLrclibTitle('')
               setLrclibArtist('')
               setLrclibDuration('')
-              setLrclibError(undefined)
-              setLrclibStatus(undefined)
               focusPreparedSearch.current = true
               onCandidateSearchCancel?.()
             }}
@@ -229,7 +248,17 @@ export function LyricsSourcePanel({ onLoaded, searchPrefill, candidateSearchActi
             <Icon name="cancel" />Cancel candidate search
           </button>
         )}
-        {lrclibStatus && <p className="mt-3 text-sm text-emerald-200" role="status">{lrclibStatus}</p>}
+        {review && <LrclibResultReview review={review} selectedKey={selectedKey} activeDocument={activeDocument} onSelect={setSelectedKey} onConfirm={confirmSelection} />}
+        {(review || isLrclibLoading || lrclibError) && <div className="review-actions">
+          <div className="action-row">
+            {!selectedKey && <button type="button" onClick={cancelReview}><Icon name="cancel" />Cancel</button>}
+            <button type="button" onClick={() => { invalidateReview(); titleInputRef.current?.focus() }}><Icon name="search" />Search again</button>
+            <button type="button" onClick={() => { invalidateReview(); pasteInputRef.current?.focus() }}><Icon name="manual" />Use manual input</button>
+            <button type="button" onClick={() => { invalidateReview(); fileInputRef.current?.focus() }}><Icon name="upload" />Import local LRC</button>
+          </div>
+          <p className="helper">Search again lets you edit the form; choose Search LRCLIB to send another request. For local loading, enter timed text or choose a file, then use its Load button.</p>
+        </div>}
+        {lrclibStatus && <p className="helper" role="status">{lrclibStatus}</p>}
         {lrclibError && <p id="lrclib-error" className="mt-3 text-sm text-red-200" role="alert"><Icon name="error" /> {lrclibError}</p>}
       </div>
 
